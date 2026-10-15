@@ -1,6 +1,19 @@
 spring:
   application:
     name: duplicata-escritural-escrituradora-api
+  datasource:
+    url: jdbc:postgresql://${ESCRITURADORA_DB_HOST:localhost}:${ESCRITURADORA_DB_PORT:5432}/${ESCRITURADORA_DB_NAME:escrituradora}
+    username: ${ESCRITURADORA_DB_USERNAME:escrituradora}
+    password: ${ESCRITURADORA_DB_PASSWORD:escrituradora_local}
+  flyway:
+    schemas: escrituradora
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: escrituradora
 
 server:
   port: 8081

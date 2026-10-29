@@ -1,4 +1,4 @@
-rootProject.name = "duplicata-escritural-financiamento"
+rootProject.name = "duplicata-escritural-plataforma"
 
 include(
     "duplicata-escritural-financiamento-api",

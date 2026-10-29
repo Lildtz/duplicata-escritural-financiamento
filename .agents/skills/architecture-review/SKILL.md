@@ -190,12 +190,12 @@ Criar um módulo é mais barato que criar um serviço, mas também deve possuir 
 Não crie antecipadamente:
 
 ```text
-eligibility
-pricing
-portfolio
-contract
-risk
-exposure
+elegibilidade
+precificacao
+carteira
+contrato
+risco
+exposicao
 ```
 
 apenas porque eles aparecem no roadmap.
@@ -221,8 +221,8 @@ porque desacopla domínio de financiamento de uma integração externa.
 Exemplo potencialmente desnecessário:
 
 ```text
-DuplicataService
-DuplicataServiceImpl
+ServicoDuplicata
+ServicoDuplicataImpl
 ```
 
 quando não existe fronteira, variação ou necessidade concreta de abstração.

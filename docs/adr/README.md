@@ -2,8 +2,8 @@
 
 - ADR 0001 — Base de Controle e escrituração assíncrona
 - ADR 0002 — Intermediação e fronteiras de interoperabilidade
-- ADR 0003 — Pendente: evolução da aplicação existente, papéis de mercado e responsabilidades das portas
+- [ADR 0003 — Consolidação dos papéis de Escrituração e Registro na Signatária simulada](0003-consolidacao-papeis-signataria.md) — Aceito; implementação pendente
 
 Os ADRs registram decisões no contexto em que foram tomadas; seus nomes e diagramas históricos foram preservados. Eles não são um inventário de funcionalidades implementadas. O estado atual e a arquitetura planejada estão descritos no [AGENTS.md](../../AGENTS.md#4-estado-atual-e-arquitetura-planejada).
 
-O ADR 0003 deverá definir a eventual evolução, renomeação ou reorganização de `duplicata-escritural-escrituradora-api`, a distinção dos papéis de Escriturador, Registradora e Signatária e as responsabilidades de `GatewayEscrituradora`, `GatewayRegistradora` e `GatewayInteroperabilidade`, preservando as fronteiras do ADR 0002. A integração com uma única Registradora é uma simplificação proposta para a primeira versão. `duplicata-escritural-signataria-api` permanece uma proposta de nomenclatura para a possível evolução da aplicação existente, sem aprovação de um novo executável que duplique suas responsabilidades. O ADR 0003 não é implementado nesta revisão documental.
+O ADR 0003 aceita a alternativa B: evoluir e renomear `duplicata-escritural-escrituradora-api` para `duplicata-escritural-signataria-api`, preservando uma única aplicação executável com capacidades distintas de Escrituração e Registro e as fronteiras do ADR 0002. A integração com uma única infraestrutura contratada é uma simplificação da primeira versão. Os nomes definitivos e os contratos das portas serão refinados nos primeiros casos de uso, sem substituição indiscriminada de `GatewayEscrituradora`. A decisão foi registrada; a migração e as capacidades de negócio ainda não foram implementadas.

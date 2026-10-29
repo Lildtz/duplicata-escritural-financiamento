@@ -150,23 +150,23 @@ duplicata-escritural-financiamento/
 
 Interoperabilidade/Base de Controle, MCP, Agent, Spring AI e as capacidades de negócio descritas abaixo são planejados. O nome `duplicata-escritural-interoperabilidade-api` é uma referência de planejamento; não é um subprojeto existente.
 
-O subprojeto existente `duplicata-escritural-escrituradora-api` mantém seu nome. A eventual evolução, renomeação ou reorganização dessa aplicação para representar os papéis da Signatária B3-like depende do ADR 0003. `duplicata-escritural-signataria-api` é uma proposta de nomenclatura para essa possível evolução, não um novo executável aprovado nem uma terceira aplicação que duplique as responsabilidades da Escrituradora.
+O subprojeto existente ainda se chama `duplicata-escritural-escrituradora-api`. O [ADR 0003](docs/adr/0003-consolidacao-papeis-signataria.md) aceita a alternativa B: evoluir e renomear essa aplicação para `duplicata-escritural-signataria-api`, preservando uma única aplicação executável com capacidades distintas de Escrituração e Registro. A decisão está aceita, mas a migração e as capacidades de negócio ainda não foram implementadas; não será criada uma aplicação adicional que duplique a Escrituradora.
 
-Fluxo conceitual proposto para a primeira versão, sujeito ao ADR 0003 (as portas e integrações ainda não estão implementadas):
+Fluxo conceitual da primeira versão conforme o ADR 0003 aceito (a renomeação, as portas e as integrações ainda não estão implementadas):
 
 ```text
 duplicata-escritural-financiamento-api
         |
         | GatewayRegistradora
         v
-duplicata-escritural-escrituradora-api (evolução sujeita ao ADR 0003)
+duplicata-escritural-signataria-api (evolução da escrituradora-api; implementação pendente)
         |
         | GatewayInteroperabilidade, quando necessário
         v
 duplicata-escritural-interoperabilidade-api
 ```
 
-O Financiamento não deve implementar lógica de roteamento ou interoperabilidade. A organização dos executáveis e as responsabilidades das portas nesse fluxo permanecem propostas sujeitas ao ADR 0003.
+O Financiamento não deve implementar lógica de roteamento ou interoperabilidade. O ADR 0003 define as fronteiras e a consolidação das capacidades na aplicação existente; os contratos concretos das portas serão refinados nos primeiros casos de uso. Interoperabilidade continua futura e só será criada quando houver um caso de uso que justifique a aplicação independente.
 
 ## duplicata-escritural-financiamento-api — responsabilidades planejadas
 
@@ -204,7 +204,7 @@ Preferencialmente permanecem como módulos internos enquanto compartilharem:
 * ciclo de vida;
 * necessidade operacional.
 
-Como simplificação proposta para a primeira versão do projeto, sujeita ao ADR 0003, o financiamento integrará uma única Registradora contratada, simulada pela infraestrutura B3-like, por uma porta conceitual como `GatewayRegistradora`. Essa escolha não é uma regra universal do domínio nem define um novo executável.
+Como simplificação da primeira versão aceita no ADR 0003, o financiamento integrará uma única infraestrutura contratada, simulada pela Signatária B3-like, por uma porta candidata como `GatewayRegistradora`. Essa escolha não é uma regra universal do domínio nem define um novo executável.
 
 Poderá solicitar capacidades de negócio como:
 
@@ -218,13 +218,13 @@ Nesse cenário simplificado, o financiamento não precisará conhecer outros par
 
 O financiamento não descobre nem escolhe onde um Sacador, uma Duplicata ou uma Agenda está mantido.
 
-## Signatária B3-like — papéis propostos
+## Signatária B3-like — decisão aceita, implementação pendente
 
-A infraestrutura B3-like simulará os papéis de mercado descritos abaixo. A proposta é evoluir a aplicação existente `duplicata-escritural-escrituradora-api`, conforme decisão futura no ADR 0003, sem criar uma aplicação adicional para duplicar essas responsabilidades.
+A infraestrutura B3-like simulará os papéis de mercado descritos abaixo. O ADR 0003 aceita a evolução e renomeação da aplicação existente `duplicata-escritural-escrituradora-api`, sem criar uma aplicação adicional para duplicar essas responsabilidades.
 
 Essa Signatária é B3-like porque os contratos públicos da B3 são a referência documental adotada. Isso não transforma o projeto em uma implementação oficial da B3 nem autoriza inferir comportamentos não documentados.
 
-A proposta para o mock reúne funções distintas, cuja organização na aplicação depende do ADR 0003:
+O mock terá funções distintas dentro da mesma aplicação executável, conforme a decisão aceita no ADR 0003, ainda não implementada:
 
 ```text
 Signatária B3-like
@@ -304,13 +304,13 @@ Não assuma que a topologia física do projeto representa a topologia real das i
 
 # 5. Fronteiras arquiteturais do ecossistema
 
-Esta seção preserva a separação entre o Agente Financiador e a infraestrutura de mercado: o Financiamento não implementa roteamento nem interoperabilidade. A integração com uma única Registradora e a organização dos papéis e portas descritas a seguir são propostas para a primeira versão, sujeitas ao ADR 0003, ainda sem integrações implementadas.
+Esta seção preserva a separação entre o Agente Financiador e a infraestrutura de mercado: o Financiamento não implementa roteamento nem interoperabilidade. A integração com uma única infraestrutura contratada e a consolidação de Escrituração e Registro na aplicação existente foram aceitas no ADR 0003 para a primeira versão. A implementação das capacidades e integrações permanece pendente.
 
 Escriturador identifica o papel de escrituração; Registradora, o papel de registro. Na [Convenção de Duplicatas Escriturais, Glossário](https://www.bcb.gov.br/content/estabilidadefinanceira/spb_docs/convencoes/Conven%C3%A7%C3%A3o%20entre%20Entidades%20Registradoras,%20Deposit%C3%A1rios%20Centrais%20e%20Escrituradores%20-%20Duplicatas%20Escriturais.pdf), Signatária é um termo abrangente para a entidade que atua como Escriturador, Registradora ou Depositário Central, conforme o contexto. O Ambiente de Interoperabilidade compreende a Base de Controle e os mecanismos de troca de informações entre Signatárias. Esses conceitos não implicam um serviço executável para cada papel.
 
 ## Fronteira do Financiamento
 
-Na simplificação proposta para a primeira versão, `duplicata-escritural-financiamento-api` se integrará com uma Registradora contratada por uma porta futura, conceitualmente chamada `GatewayRegistradora`. A definição final dessa porta depende do ADR 0003.
+Na simplificação da primeira versão aceita no ADR 0003, `duplicata-escritural-financiamento-api` se integrará com a infraestrutura contratada por uma porta futura, cujo nome candidato é `GatewayRegistradora`. O nome definitivo e os métodos serão refinados no primeiro caso de uso.
 
 O financiamento NÃO deve:
 
@@ -330,13 +330,13 @@ financiamento-api -> SignatariaExternaClient
 financiamento-api -> RegistradoraExternaClient
 ```
 
-A interação proposta para a primeira versão é:
+A interação da primeira versão, aceita e ainda não implementada, é:
 
 ```text
 financiamento-api -> GatewayRegistradora (conceitual) -> infraestrutura contratada
 ```
 
-A infraestrutura contratada abstrai do Financiamento a localização, o roteamento e a interoperabilidade. As responsabilidades de Registradora e Escriturador permanecem distintas por capacidade; sua organização na aplicação B3-like será definida no ADR 0003.
+A infraestrutura contratada abstrai do Financiamento a localização, o roteamento e a interoperabilidade. Conforme o ADR 0003, as responsabilidades de Registradora e Escriturador permanecerão distintas por capacidade dentro de uma única aplicação B3-like.
 
 ## Sacador local e Sacador externo
 
@@ -504,7 +504,7 @@ Um novo serviço deve possuir justificativa concreta como:
 
 Exemplos de justificativa válida:
 
-A aplicação existente `duplicata-escritural-escrituradora-api` representa uma infraestrutura externa ao Agente Financiador. A proposta de evolução dos seus papéis depende do ADR 0003.
+A aplicação existente `duplicata-escritural-escrituradora-api` representa uma infraestrutura externa ao Agente Financiador. Sua evolução para Signatária, aceita no ADR 0003, preserva uma única aplicação executável e ainda não foi implementada.
 
 O Ambiente de Interoperabilidade é independente porque representa uma infraestrutura externa à Signatária e possui responsabilidade própria de roteamento.
 
@@ -568,9 +568,9 @@ GatewayInteroperabilidade
 
 `GatewayInteroperabilidade` é o nome conceitual proposto para uma porta futura entre a infraestrutura de mercado simulada e o Ambiente de Interoperabilidade.
 
-Nenhuma dessas portas é uma interface implementada. A definição final das responsabilidades de `GatewayRegistradora`, `GatewayInteroperabilidade` e `GatewayEscrituradora` depende do ADR 0003. Preserve `GatewayEscrituradora` nos exemplos anteriores; não o substitua automaticamente por `GatewayRegistradora`.
+Nenhuma dessas portas é uma interface implementada. O ADR 0003 aceita as fronteiras e mantém os nomes e métodos concretos para refinamento nos primeiros casos de uso. Preserve `GatewayEscrituradora` nos exemplos anteriores e avalie sua responsabilidade conforme o caso de uso; não o substitua automaticamente por `GatewayRegistradora`.
 
-As portas do Financiamento não devem lhe atribuir lógica de roteamento ou interoperabilidade. A proposta de integrar uma única Registradora na primeira versão não estabelece uma proibição universal de outras integrações de negócio.
+As portas do Financiamento não devem lhe atribuir lógica de roteamento ou interoperabilidade. A simplificação de integrar uma única infraestrutura contratada na primeira versão não estabelece uma proibição universal de outras integrações de negócio.
 
 Não crie interfaces simplesmente porque:
 
@@ -666,7 +666,7 @@ duplicata-escritural-financiamento-api
 duplicata-escritural-escrituradora-api
 ```
 
-Proposta de nomenclatura para a possível evolução da aplicação existente, dependente do ADR 0003: `duplicata-escritural-signataria-api`.
+Nomenclatura aceita no ADR 0003 para a evolução da aplicação existente, ainda não implementada: `duplicata-escritural-signataria-api`.
 
 Referências de nomenclatura para outros componentes planejados, sem criação automática:
 
@@ -998,7 +998,7 @@ Os contratos públicos da B3 são a referência documental do projeto. A Signat�
 
 Não modele instituições reais adicionais como participantes implementados. Quando um cenário exigir outra ponta para testar interoperabilidade, utilize um identificador genérico, como `SIGNATARIA_EXTERNA_001`, e documente que a resposta é simulada.
 
-No cenário simplificado proposto para a primeira versão, sujeito ao ADR 0003, o `duplicata-escritural-financiamento-api` integra a infraestrutura contratada e não acessa outros participantes para executar roteamento ou interoperabilidade.
+No cenário simplificado da primeira versão aceito no ADR 0003, o `duplicata-escritural-financiamento-api` integrará a infraestrutura contratada e não acessará outros participantes para executar roteamento ou interoperabilidade.
 
 Exemplos de acessos de roteamento ou interoperabilidade que não pertencem ao Financiamento:
 
@@ -1009,7 +1009,7 @@ SignatariaExternaClient
 RegistradoraExternaClient
 ```
 
-Detalhes de localização, roteamento e interoperabilidade pertencem à infraestrutura de mercado. `GatewayRegistradora` é um nome conceitual proposto; as responsabilidades finais das portas serão definidas no ADR 0003.
+Detalhes de localização, roteamento e interoperabilidade pertencem à infraestrutura de mercado. `GatewayRegistradora` é um nome candidato de porta; os contratos concretos serão refinados nos primeiros casos de uso, respeitando as fronteiras aceitas no ADR 0003.
 
 ---
 
@@ -1051,7 +1051,7 @@ Não apresente apenas a solução escolhida.
 
 Uma boa decisão arquitetural deve conseguir explicar por que alternativas foram descartadas.
 
-Preserve o histórico dos ADRs: não reescreva decisões anteriores para refletir decisões posteriores. O ADR 0003 permanece pendente para definir a evolução da aplicação existente, a organização dos papéis de Escrituração, Registro e Signatária e as responsabilidades das portas em relação ao ADR 0002, que ainda agrupa essas capacidades sob `escrituradora-api`. Esta revisão documental não implementa o ADR 0003 nem renomeia a aplicação existente.
+Preserve o histórico dos ADRs: não reescreva decisões anteriores para refletir decisões posteriores. O ADR 0003 está aceito, com implementação pendente: adota a alternativa B, evoluindo e renomeando a aplicação existente para Signatária com capacidades distintas de Escrituração e Registro. Os ADRs 0001 e 0002 permanecem históricos; eventuais conflitos de negócio ou interoperabilidade devem ser conciliados antes da implementação. O registro documental não executa a renomeação; nomes e métodos concretos das portas serão refinados nos primeiros casos de uso.
 
 Toda revisão arquitetural deve responder:
 

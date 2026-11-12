@@ -2,7 +2,7 @@ package br.com.duplicataescritural.signataria.seguranca;
 
 import java.io.IOException;
 
-import br.com.duplicataescritural.signataria.escrituracao.infraestrutura.persistencia.Sacadores;
+import br.com.duplicataescritural.signataria.escrituracao.infraestrutura.persistencia.SacadorRepository;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.boot.context.properties.bind.Binder;
@@ -22,7 +22,7 @@ import org.springframework.security.web.authentication.AnonymousAuthenticationFi
 public class SegurancaEscrituracao {
 
     @Bean
-    SecurityFilterChain seguranca(HttpSecurity http, Environment environment, Sacadores sacadores) throws Exception {
+    SecurityFilterChain seguranca(HttpSecurity http, Environment environment, SacadorRepository sacadores) throws Exception {
         boolean local = environment.acceptsProfiles(Profiles.of("local"));
         if (local) {
             var tokens = Binder.get(environment).bind("signataria.autenticacao-local", TokensLocais.class)

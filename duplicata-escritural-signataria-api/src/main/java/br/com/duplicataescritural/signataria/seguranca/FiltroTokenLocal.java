@@ -8,7 +8,7 @@ import java.util.HexFormat;
 import java.util.List;
 
 import br.com.duplicataescritural.signataria.escrituracao.dominio.Sacador;
-import br.com.duplicataescritural.signataria.escrituracao.infraestrutura.persistencia.Sacadores;
+import br.com.duplicataescritural.signataria.escrituracao.infraestrutura.persistencia.SacadorRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,9 +24,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
 final class FiltroTokenLocal extends OncePerRequestFilter {
 
     private final TokensLocais configuracao;
-    private final Sacadores sacadores;
+    private final SacadorRepository sacadores;
 
-    FiltroTokenLocal(TokensLocais configuracao, Sacadores sacadores) {
+    FiltroTokenLocal(TokensLocais configuracao, SacadorRepository sacadores) {
         this.configuracao = configuracao;
         this.sacadores = sacadores;
     }

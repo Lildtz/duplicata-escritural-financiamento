@@ -19,8 +19,9 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import br.com.duplicataescritural.signataria.escrituracao.dominio.Cnpj;
+import br.com.duplicataescritural.signataria.escrituracao.aplicacao.ServicoProcessamentoEscrituracao;
 import br.com.duplicataescritural.signataria.escrituracao.dominio.ExemploEscrituracao;
-import br.com.duplicataescritural.signataria.escrituracao.infraestrutura.persistencia.ProcessamentosEscrituracao;
+import br.com.duplicataescritural.signataria.escrituracao.infraestrutura.persistencia.ProcessamentoEscrituracaoRepository;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,7 +46,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @Testcontainers
 @ActiveProfiles("local")
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "signataria.escrituracao.processamento.habilitado=false")
 @ExtendWith(OutputCaptureExtension.class)
 class EscrituracaoHttpTests {
 
@@ -64,8 +66,9 @@ class EscrituracaoHttpTests {
     @Autowired JdbcClient jdbc;
     @Autowired JsonMapper json;
     @Autowired Environment environment;
-    @Autowired ProcessamentosEscrituracao processamentos;
+    @Autowired ProcessamentoEscrituracaoRepository processamentos;
     @Autowired Flyway flyway;
+    @Autowired ServicoProcessamentoEscrituracao worker;
 
     @DynamicPropertySource
     static void tokensLocais(DynamicPropertyRegistry registry) {
@@ -80,6 +83,7 @@ class EscrituracaoHttpTests {
     @BeforeEach
     void cadastrarSacadoresNoBancoDescartavel() {
         jdbc.sql("DELETE FROM escrituradora.processamento_escrituracao").update();
+        jdbc.sql("DELETE FROM escrituradora.duplicata").update();
         jdbc.sql("DELETE FROM escrituradora.sacador").update();
         cadastrar(SACADOR_A, "11222333000181", true);
         cadastrar(SACADOR_B, "12ABC34501DE35", true);
@@ -209,7 +213,7 @@ class EscrituracaoHttpTests {
         assertThat(post(TOKENS.getFirst(), "primeira", entrada()).statusCode()).isEqualTo(202);
         assertThat(post(TOKENS.getFirst(), "segunda", entrada()).statusCode()).isEqualTo(202);
         assertThat(contar()).isEqualTo(2);
-        assertThat(jdbc.sql("SELECT to_regclass('escrituradora.duplicata') IS NULL").query(Boolean.class).single()).isTrue();
+        assertThat(jdbc.sql("SELECT count(*) FROM escrituradora.duplicata").query(Integer.class).single()).isZero();
     }
 
     @Test
@@ -238,6 +242,71 @@ class EscrituracaoHttpTests {
         assertThat(jdbc.sql("SELECT checksum FROM escrituradora.flyway_schema_history WHERE version = '1'")
                 .query(Integer.class).single()).isEqualTo(checksum);
         assertThat(get(TOKENS.getFirst(), location).body()).isEqualTo(resposta.body());
+    }
+
+    @Test
+    void consultaConclusaoIsoladaERepetePostComRespostaOriginal() throws Exception {
+        var original = post(TOKENS.getFirst(), "concluido", entrada());
+        String location = original.headers().firstValue("Location").orElseThrow();
+        worker.processarProximo();
+        var consulta = get(TOKENS.getFirst(), location);
+        assertThat(consulta.statusCode()).isEqualTo(200);
+        var corpo = json.readTree(consulta.body());
+        assertThat(corpo.get("status").asString()).isEqualTo("CONCLUIDO");
+        UUID idDuplicata = UUID.fromString(corpo.get("idDuplicata").asString());
+        assertThat(jdbc.sql("SELECT count(*) FROM escrituradora.duplicata WHERE id = :id")
+                .param("id", idDuplicata).query(Integer.class).single()).isEqualTo(1);
+        assertThat(corpo.hasNonNull("escrituradaEm")).isTrue();
+        assertThat(corpo.hasNonNull("finalizadoEm")).isTrue();
+        assertThat(corpo.has("codigo")).isFalse();
+        assertThat(get(TOKENS.get(1), location).statusCode()).isEqualTo(404);
+        var repetida = post(TOKENS.getFirst(), "concluido", entrada());
+        assertThat(repetida.statusCode()).isEqualTo(202);
+        assertThat(repetida.body()).isEqualTo(original.body());
+        assertThat(repetida.headers().firstValue("Location")).contains(location);
+        assertThat(post(TOKENS.getFirst(), "concluido", entrada().put("numeroDuplicata", "OUTRO")).statusCode()).isEqualTo(409);
+        assertThat(get(TOKENS.getFirst(), location).body()).isEqualTo(consulta.body());
+    }
+
+    @Test
+    void consultaRejeicaoDeNegocioComCodigoEstavel() throws Exception {
+        post(TOKENS.getFirst(), "titulo-original", entrada());
+        worker.processarProximo();
+        var repetida = post(TOKENS.getFirst(), "titulo-repetido", entrada());
+        worker.processarProximo();
+        String location = repetida.headers().firstValue("Location").orElseThrow();
+        var consulta = get(TOKENS.getFirst(), location);
+        assertThat(consulta.statusCode()).isEqualTo(200);
+        var corpo = json.readTree(consulta.body());
+        assertThat(corpo.get("status").asString()).isEqualTo("REJEITADO");
+        assertThat(corpo.get("codigo").asString()).isEqualTo("DUPLICATA_JA_ESCRITURADA");
+        assertThat(corpo.hasNonNull("motivo")).isTrue();
+        assertThat(corpo.hasNonNull("finalizadoEm")).isTrue();
+        assertThat(corpo.has("idDuplicata")).isFalse();
+        assertThat(corpo.has("escrituradaEm")).isFalse();
+        assertThat(get(TOKENS.get(1), location).statusCode()).isEqualTo(404);
+        assertThat(post(TOKENS.getFirst(), "titulo-repetido", entrada()).body()).isEqualTo(repetida.body());
+    }
+
+    @Test
+    void consultaEmProcessamentoEFalhaTecnicaSemDetalhesInternos() throws Exception {
+        var original = post(TOKENS.getFirst(), "falha-tecnica", entrada());
+        String location = original.headers().firstValue("Location").orElseThrow();
+        var reserva = worker.reservarProximo().orElseThrow();
+        assertThat(json.readTree(get(TOKENS.getFirst(), location).body()).get("status").asString()).isEqualTo("EM_PROCESSAMENTO");
+        worker.registrarFalha(reserva, new org.springframework.dao.NonTransientDataAccessResourceException(
+                "detalhes-internos SQL escrituradora stacktrace"));
+        var consulta = get(TOKENS.getFirst(), location);
+        assertThat(consulta.statusCode()).isEqualTo(200);
+        var corpo = json.readTree(consulta.body());
+        assertThat(corpo.get("status").asString()).isEqualTo("FALHA_TECNICA");
+        assertThat(corpo.get("codigo").asString()).isEqualTo("ERRO_TECNICO");
+        assertThat(corpo.hasNonNull("motivo")).isTrue();
+        assertThat(corpo.hasNonNull("finalizadoEm")).isTrue();
+        assertThat(corpo.has("idDuplicata")).isFalse();
+        assertThat(consulta.body()).doesNotContain("detalhes-internos", "SQL", "stacktrace", "escrituradora");
+        assertThat(get(TOKENS.get(1), location).statusCode()).isEqualTo(404);
+        assertThat(post(TOKENS.getFirst(), "falha-tecnica", entrada()).body()).isEqualTo(original.body());
     }
 
     private List<HttpResponse<String>> concorrentes(int quantidade, boolean conflito) throws Exception {

@@ -1,12 +1,14 @@
-# Escrituração Manual — Entrega 1
+# Escrituração Manual — Entregas 1 e 2
 
 ## Escopo e limites
 
-Esta entrega recebe uma solicitação por POST, confirma sua persistência e permite
-consultá-la por GET. **Todo processamento permanece PENDENTE indefinidamente.**
-Não há execução assíncrona, agendamento, retentativas ou criação de Duplicata.
-O recebimento não declara emissão de título, Registro, apresentação ao Sacado,
-aceite, comprovação de lastro ou conformidade regulatória integral.
+O POST confirma o recebimento durável e o GET consulta o estado atual. A Entrega 2
+acrescenta processamento assíncrono interno, retentativas limitadas e criação de
+Duplicata local simulada. O agendamento exige habilitação explícita e fica desabilitado
+por padrão. A implementação permanece sujeita ao Code Review da Entrega 2.
+CONCLUIDO significa somente criação local no simulador. Não declara Registro,
+apresentação ao Sacado, aceite, comprovação de lastro ou conformidade regulatória integral.
+Consulte [execução, estados, configuração e recuperação](processamento-assincrono-escrituracao.md).
 
 Os contratos abaixo são próprios do simulador. A referência documental B3 é o
 [Manual de Operações, seções 7.1.1 e 7.1.3](https://www.b3.com.br/data/files/00/B5/6B/D0/8F17F910FC0436F9AC094EA8/Duplicata%20Escritural%20-%20Manual%20Operacional.pdf),
@@ -16,7 +18,8 @@ seus endpoints, envelopes, identificadores ou estados. Os ADRs históricos são 
 O ADR 0001 atribui a geração do IUD à Escrituração; essa parte está adiada.
 O ADR 0002 deixa seu formato em aberto. O ADR 0003 mantém Escrituração e Registro
 na mesma Signatária, com responsabilidades distintas. O UUID retornado nesta
-entrega identifica somente o processamento; não é um IUD.
+entrega identifica somente o processamento; não é um IUD. O `idDuplicata` também
+é um UUID técnico interno, distinto de um futuro IUD regulatório, ainda não gerado.
 
 ## Contratos REST
 
@@ -65,8 +68,25 @@ Após o commit, retorna `202 Accepted`, com `Location` apontando para o GET:
 ```
 
 GET `/api/v1/escrituracoes/processamentos/{idProcessamento}`, com o mesmo esquema
-de autenticação, retorna `200` e a mesma representação. A consulta usa o ID e o
-Sacador autenticado; não expõe o payload ou dados de outros Sacadores.
+de autenticação, retorna `200` e o estado atual. A consulta usa o ID e o Sacador
+autenticado; não expõe o payload ou dados de outros Sacadores.
+
+O POST mantém a representação original de recebimento, inclusive após conclusão
+ou falha: `202`, mesmo Location, ID, `recebidoEm` e `status: PENDENTE`. Use o GET
+para acompanhar a execução. A comparação de conteúdo idempotente e o 409 são preservados.
+
+O GET preserva os três campos originais e amplia os valores de `status`:
+
+| Status | Campos adicionais |
+|---|---|
+| PENDENTE, EM_PROCESSAMENTO | Nenhum |
+| CONCLUIDO | `idDuplicata`, `escrituradaEm`, `finalizadoEm` |
+| REJEITADO | `codigo`, `motivo`, `finalizadoEm` |
+| FALHA_TECNICA | `codigo`, `motivo`, `finalizadoEm` seguros |
+
+Campos sem aplicação são omitidos. Clientes que restringiam o enum a PENDENTE
+precisam aceitar os novos estados do GET; endpoints, autenticação e POST são preservados.
+Os códigos e exemplos terminais estão no [guia de processamento](processamento-assincrono-escrituracao.md).
 
 | Situação | HTTP |
 |---|---|
@@ -111,10 +131,12 @@ ajustes são **simplificações do simulador**, não regras universais do domín
 
 ## Persistência e idempotência
 
-A migration `V1__recebimento_escrituracao.sql` acrescenta somente `sacador` e
-`processamento_escrituracao` ao schema existente `escrituradora`.
+A migration `V1__recebimento_escrituracao.sql` acrescentou `sacador` e
+`processamento_escrituracao` ao schema existente `escrituradora` e permanece preservada.
+A V2 cria `duplicata` e evolui o processamento por ALTER TABLE, preservando pedidos
+existentes em PENDENTE, com zero tentativas e elegibilidade inicial em `recebidoEm`.
 Não altera banco, histórico Flyway anterior, variáveis ESCRITURADORA_DB_*, Compose,
-volumes, JPA ou porta 8081. Não existem dados cadastrais padrão em migrations.
+volumes, configuração JPA ou porta 8081. Não existem dados cadastrais padrão em migrations.
 
 O processamento guarda `FotografiaSacador` e os dados normalizados como valores
 imutáveis, separados da entidade cadastral `Sacador`. Alterar o cadastro posteriormente
@@ -131,21 +153,22 @@ O controlador recebe o resultado somente após a confirmação transacional.
 * Mesma chave em Sacadores diferentes: solicitações independentes.
 * Rotação do token não modifica o escopo: a identidade é a do Sacador, não a credencial.
 * Chaves novas criam pedidos distintos, mesmo com título ou referência fiscal iguais.
-  Deduplicação de títulos pertence à entrega de criação da Duplicata, ainda ausente.
+  Na execução, as constraints comerciais impedem a criação de um segundo título.
 * Não existe constraint única isolada por referência fiscal nem expiração automática
   das chaves. Retenção e descarte exigem decisão explícita futura.
 
-Spring Data JPA é o mecanismo principal: `Sacadores` usa `findById` e
-`ProcessamentosEscrituracao` usa consultas derivadas para chave idempotente e
+Spring Data JPA é o mecanismo principal: `SacadorRepository` usa `findById` e
+`ProcessamentoEscrituracaoRepository` usa consultas derivadas para chave idempotente e
 ID/Sacador. Ambas são interfaces `JpaRepository`; não há CRUD manual na aplicação.
 
-A única operação JDBC em produção é `InsercaoIdempotenteProcessamento.inserirSeAusente`,
-que mantém `INSERT ... ON CONFLICT ON CONSTRAINT uk_processamento_idempotencia DO NOTHING`.
+A operação JDBC `InsercaoIdempotenteProcessamento.inserirSeAusente`
+mantém `INSERT ... ON CONFLICT ON CONSTRAINT uk_processamento_idempotencia DO NOTHING`.
 Sua vantagem concreta é arbitrar atomicamente a disputa pela chave sem abortar a
 transação por violação de unicidade. Substituí-la por `save` e captura da exceção
 não preservaria essa propriedade dentro da mesma transação.
 JDBC e JPA usam o DataSource e o gerenciamento transacional Spring existentes.
-Não há limpeza manual do contexto JPA ou alteração dos limites transacionais.
+Não há limpeza manual do contexto JPA. A seleção concorrente de trabalho adiciona
+uma consulta nativa para SKIP LOCKED; Duplicata e transições usam JPA.
 
 SQL nos testes serve para fixtures independentes do mapeamento, alterações de
 cadastro externas à sessão JPA e verificações do schema/Flyway. Não implementa CRUD de produção.
@@ -167,7 +190,10 @@ br.com.duplicataescritural.signataria
     │   ├── ErrosEscrituracao
     │   └── SolicitacaoEscrituracaoRequest
     ├── aplicacao
-    │   └── ServicoEscrituracao
+    │   ├── ServicoEscrituracao
+    │   ├── ServicoProcessamentoEscrituracao
+    │   ├── ConfiguracaoProcessamento
+    │   └── AgendadorEscrituracao
     ├── dominio
     │   ├── ChaveIdempotencia
     │   ├── Cnpj
@@ -176,13 +202,19 @@ br.com.duplicataescritural.signataria
     │   ├── Endereco
     │   ├── FotografiaSacador
     │   ├── ProcessamentoEscrituracao
+    │   ├── Duplicata
+    │   ├── ReservaExecucao
+    │   ├── CodigoResultado
+    │   ├── RejeicaoEscrituracao
     │   └── Sacador
     └── infraestrutura
+        ├── ConfiguracaoEscrituracao
         └── persistencia
             ├── CnpjConverter
             ├── InsercaoIdempotenteProcessamento
-            ├── ProcessamentosEscrituracao
-            └── Sacadores
+            ├── ProcessamentoEscrituracaoRepository
+            ├── DuplicataRepository
+            └── SacadorRepository
 ```
 
 `api` contém DTOs e conversão HTTP, sem reproduzir validações financeiras.
@@ -196,14 +228,12 @@ imutáveis capturados durante a autenticação; não expõe uma entidade JPA com
 sem um segundo modelo persistente. O trade-off é aceitar anotações JPA/Hibernate e
 construtores protegidos sem argumentos no domínio, reduzindo isolamento em relação
 ao ORM e portabilidade do JSONB. Em troca, evitamos entidades e mapeadores duplicados.
-O acesso JPA é por campos, sem setters públicos. O processamento é marcado
-`@Immutable` nesta entrega; os dados e a fotografia continuam records imutáveis.
-O `@Immutable` na entidade inteira e o CHECK `estado = 'PENDENTE'` da migration V1
-são restrições temporárias da Entrega 1, que somente recebe e consulta solicitações.
-Antes de implementar transições em uma entrega futura, será necessário rever esse
-mapeamento e evoluir o CHECK por uma nova migration, preservando o histórico V1.
-Isso não autoriza alterar a fotografia ou os dados originais da solicitação.
-Nenhum novo estado ou mudança de schema faz parte desta revisão.
+O acesso JPA é por campos, sem setters públicos. O processamento deixa de ter
+`@Immutable`, mantendo chave, dados, fotografia, Sacador e recebimento com
+`updatable = false`. Somente métodos explícitos mudam o estado da execução.
+Duplicata é `@Immutable` e reutiliza os dados imutáveis da emissão. Seus componentes
+de identidade comercial também são colunas, com CHECK de consistência com o JSON.
+Os novos estados e atributos são introduzidos pela V2, sem alterar V1.
 `FotografiaSacador` é um valor histórico, não outra entidade ou cadastro.
 Seu JSON preserva exatamente a estrutura anterior, sem migração de dados.
 
@@ -286,6 +316,10 @@ git status --short
 ```
 
 Os testes usam tokens aleatórios em memória e PostgreSQL descartável via Testcontainers.
-Cobrem autenticação, validação, isolamento, snapshots, commit, idempotência concorrente
-e reaplicação de Flyway sem alteração do histórico. A coordenação concorrente usa
+Cobrem autenticação, validação, isolamento, snapshots, commit, idempotência concorrente,
+processamento e estados terminais, constraints comerciais, rollback após INSERT,
+retentativas, abandono e execução atrasada. A migração incremental aplica V1, insere
+um pedido antigo e aplica V2 preservando conteúdo e checksum. O teste JPA continua
+lendo JSON no formato anterior. Triggers no PostgreSQL descartável injetam falhas;
+um Clock controlável determina backoff e expiração. A coordenação concorrente usa
 latches e futures com timeout, sem Thread.sleep.

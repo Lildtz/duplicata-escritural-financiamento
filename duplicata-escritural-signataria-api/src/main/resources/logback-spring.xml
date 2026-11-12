@@ -1,0 +1,18 @@
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <!-- Hibernate emite códigos e mensagem do banco no mesmo nível; somente o resumo numérico é liberado. -->
+    <appender name="JDBC_SEGURO" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] %logger - %replace(%msg){'(?s)^(?!HHH000247: ErrorCode: -?[0-9]+, SQLState: (?:[A-Z0-9]{5}|null)$).*','Detalhes JDBC omitidos por segurança'}%nopex%n</pattern>
+        </encoder>
+    </appender>
+    <logger name="org.hibernate.orm.jdbc.error" level="WARN" additivity="false">
+        <appender-ref ref="JDBC_SEGURO"/>
+    </logger>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

@@ -4,6 +4,8 @@ import java.net.URI;
 import java.time.Instant;
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import br.com.duplicataescritural.signataria.escrituracao.aplicacao.ServicoEscrituracao;
 import br.com.duplicataescritural.signataria.escrituracao.dominio.ChaveIdempotencia;
 import br.com.duplicataescritural.signataria.escrituracao.dominio.ProcessamentoEscrituracao;
@@ -44,7 +46,8 @@ public class EscrituracaoController {
         var processamento = servico.receber(autenticado.sacador(), chaveValidada, dados);
         return ResponseEntity.accepted()
                 .location(URI.create("/api/v1/escrituracoes/processamentos/" + processamento.id()))
-                .body(resposta(processamento));
+                .body(new RespostaProcessamento(processamento.id(), ProcessamentoEscrituracao.Estado.PENDENTE,
+                        processamento.recebidoEm(), null, null, null, null, null));
     }
 
     @GetMapping("/processamentos/{idProcessamento}")
@@ -55,9 +58,16 @@ public class EscrituracaoController {
     }
 
     private RespostaProcessamento resposta(ProcessamentoEscrituracao processamento) {
-        return new RespostaProcessamento(processamento.id(), processamento.estado(), processamento.recebidoEm());
+        boolean falhaTerminal = processamento.estado() == ProcessamentoEscrituracao.Estado.REJEITADO
+                || processamento.estado() == ProcessamentoEscrituracao.Estado.FALHA_TECNICA;
+        var codigo = falhaTerminal ? processamento.codigoResultado() : null;
+        return new RespostaProcessamento(processamento.id(), processamento.estado(), processamento.recebidoEm(),
+                processamento.idDuplicata(), processamento.escrituradaEm(), processamento.finalizadoEm(),
+                codigo == null ? null : codigo.name(), codigo == null ? null : codigo.motivo());
     }
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public record RespostaProcessamento(UUID idProcessamento, ProcessamentoEscrituracao.Estado status,
-                                       Instant recebidoEm) { }
+                                       Instant recebidoEm, UUID idDuplicata, Instant escrituradaEm,
+                                       Instant finalizadoEm, String codigo, String motivo) { }
 }

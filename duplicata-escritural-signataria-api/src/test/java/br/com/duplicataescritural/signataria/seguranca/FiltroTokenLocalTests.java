@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
 
-import br.com.duplicataescritural.signataria.escrituracao.infraestrutura.persistencia.Sacadores;
+import br.com.duplicataescritural.signataria.escrituracao.infraestrutura.persistencia.SacadorRepository;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -40,7 +40,7 @@ class FiltroTokenLocalTests {
                 .digest(token.getBytes(StandardCharsets.US_ASCII)));
         UUID id = UUID.randomUUID();
         var configuracao = new TokensLocais(List.of(new TokensLocais.Credencial(sha256, id)));
-        var sacadores = mock(Sacadores.class);
+        var sacadores = mock(SacadorRepository.class);
         when(sacadores.findById(id)).thenThrow(falha);
         var request = new MockHttpServletRequest();
         request.addHeader("Authorization", "Bearer " + token);

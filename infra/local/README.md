@@ -5,11 +5,12 @@ O nome lógico do projeto Gradle continua `duplicata-escritural-plataforma`.
 
 `duplicata-escritural-signataria-api` é a aplicação existente, anteriormente chamada
 `duplicata-escritural-escrituradora-api`. A renomeação prevista no ADR 0003 preserva
-o comportamento de bootstrap, Actuator e persistência. A primeira entrega de
-Escrituração implementa recebimento e consulta de solicitações, sempre `PENDENTE`.
+o comportamento de bootstrap, Actuator e persistência. Escrituração implementa
+recebimento, consulta e processamento assíncrono com criação local de Duplicata.
+O agendador está desabilitado por padrão; sua configuração está no guia abaixo.
 O [guia de Escrituração Manual](../../docs/escrituracao-manual.md) descreve o contrato,
 o cadastro local do Sacador e o provisionamento de tokens sem segredos versionados.
-Execução da escrituração, Duplicata e Registro continuam planejados.
+Registro e IUD regulatório continuam planejados. CONCLUIDO representa somente a criação local.
 `duplicata-escritural-interoperabilidade-api` é uma aplicação futura.
 
 Inicie o PostgreSQL com Docker disponível:

@@ -2,7 +2,7 @@ package br.com.duplicataescritural.signataria.escrituracao.infraestrutura.persis
 
 import java.util.UUID;
 
-import br.com.duplicataescritural.signataria.escrituracao.dominio.Sacador;
+import br.com.duplicataescritural.signataria.escrituracao.dominio.Duplicata;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface Sacadores extends JpaRepository<Sacador, UUID> { }
+public interface DuplicataRepository extends JpaRepository<Duplicata, UUID> { }

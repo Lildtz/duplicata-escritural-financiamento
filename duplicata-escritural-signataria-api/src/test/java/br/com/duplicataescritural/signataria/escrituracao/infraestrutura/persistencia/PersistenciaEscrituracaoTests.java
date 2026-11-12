@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 import br.com.duplicataescritural.signataria.escrituracao.aplicacao.ServicoEscrituracao;
+import br.com.duplicataescritural.signataria.escrituracao.aplicacao.ServicoProcessamentoEscrituracao;
 import br.com.duplicataescritural.signataria.escrituracao.dominio.ChaveIdempotencia;
 import br.com.duplicataescritural.signataria.escrituracao.dominio.Cnpj;
 import br.com.duplicataescritural.signataria.escrituracao.dominio.ExemploEscrituracao;
@@ -27,22 +28,25 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 @Testcontainers
-@SpringBootTest
+@SpringBootTest(properties = "signataria.escrituracao.processamento.habilitado=false")
 class PersistenciaEscrituracaoTests {
 
     @Container
     @ServiceConnection
     static final PostgreSQLContainer POSTGRESQL = new PostgreSQLContainer("postgres:18-alpine");
 
-    @Autowired Sacadores sacadores;
-    @Autowired ProcessamentosEscrituracao processamentos;
+    @Autowired SacadorRepository sacadores;
+    @Autowired ProcessamentoEscrituracaoRepository processamentos;
     @Autowired ServicoEscrituracao servico;
+    @Autowired ServicoProcessamentoEscrituracao worker;
+    @Autowired DuplicataRepository duplicatas;
     @Autowired JdbcClient jdbc;
     @Autowired PlatformTransactionManager transactionManager;
 
     @BeforeEach
     void limparBancoDescartavel() {
         processamentos.deleteAllInBatch();
+        duplicatas.deleteAllInBatch();
         sacadores.deleteAllInBatch();
     }
 
@@ -88,6 +92,13 @@ class PersistenciaEscrituracaoTests {
         assertThat(recuperado.sacadorNoRecebimento()).isEqualTo(sacador.fotografia());
         assertThat(recuperado.recebidoEm()).isEqualTo(Instant.parse("2026-11-12T15:00:00Z"));
         assertThat(recuperado.estado()).isEqualTo(ProcessamentoEscrituracao.Estado.PENDENTE);
+        worker.processarProximo();
+        var concluido = processamentos.findById(id).orElseThrow();
+        assertThat(concluido.estado()).isEqualTo(ProcessamentoEscrituracao.Estado.CONCLUIDO);
+        assertThat(concluido.tentativas()).isEqualTo(1);
+        assertThat(concluido.dados()).isEqualTo(recuperado.dados());
+        assertThat(concluido.sacadorNoRecebimento()).isEqualTo(recuperado.sacadorNoRecebimento());
+        assertThat(duplicatas.findById(concluido.idDuplicata()).orElseThrow().dados()).isEqualTo(recuperado.dados());
     }
 
     @Test

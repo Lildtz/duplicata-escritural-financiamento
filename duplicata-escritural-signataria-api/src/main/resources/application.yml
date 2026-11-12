@@ -22,6 +22,17 @@ spring:
 server:
   port: 8081
 
+signataria:
+  escrituracao:
+    processamento:
+      habilitado: false
+      polling: 1s
+      maximo-tentativas: 3
+      espera-segunda-tentativa: 5s
+      espera-terceira-tentativa: 30s
+      duracao-reserva: 60s
+      timeout-execucao: 10s
+
 management:
   endpoints:
     web:

@@ -11,7 +11,7 @@ import br.com.duplicataescritural.signataria.escrituracao.dominio.DadosEscritura
 import br.com.duplicataescritural.signataria.escrituracao.dominio.FotografiaSacador;
 import br.com.duplicataescritural.signataria.escrituracao.dominio.ProcessamentoEscrituracao;
 import br.com.duplicataescritural.signataria.escrituracao.infraestrutura.persistencia.InsercaoIdempotenteProcessamento;
-import br.com.duplicataescritural.signataria.escrituracao.infraestrutura.persistencia.ProcessamentosEscrituracao;
+import br.com.duplicataescritural.signataria.escrituracao.infraestrutura.persistencia.ProcessamentoEscrituracaoRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,10 +19,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ServicoEscrituracao {
 
-    private final ProcessamentosEscrituracao processamentos;
+    private final ProcessamentoEscrituracaoRepository processamentos;
     private final InsercaoIdempotenteProcessamento insercao;
 
-    public ServicoEscrituracao(ProcessamentosEscrituracao processamentos, InsercaoIdempotenteProcessamento insercao) {
+    public ServicoEscrituracao(ProcessamentoEscrituracaoRepository processamentos, InsercaoIdempotenteProcessamento insercao) {
         this.processamentos = processamentos;
         this.insercao = insercao;
     }

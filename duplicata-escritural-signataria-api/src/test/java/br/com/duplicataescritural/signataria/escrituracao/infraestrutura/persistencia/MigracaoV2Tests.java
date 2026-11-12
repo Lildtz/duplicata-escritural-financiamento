@@ -56,7 +56,7 @@ class MigracaoV2Tests {
             }
         }
         var v2 = Flyway.configure().dataSource(POSTGRESQL.getJdbcUrl(), POSTGRESQL.getUsername(), POSTGRESQL.getPassword())
-                .schemas("escrituradora").load();
+                .schemas("escrituradora").target("2").load();
         assertThat(v2.migrate().migrationsExecuted).isEqualTo(1);
         assertThat(v2.info().current().getVersion().toString()).isEqualTo("2");
         var historicoV1 = Arrays.stream(v2.info().all())

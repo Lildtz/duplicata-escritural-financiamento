@@ -33,7 +33,10 @@ final class FiltroTokenLocal extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !request.getServletPath().startsWith("/api/v1/escrituracoes/");
+        String caminho = request.getServletPath();
+        return !caminho.startsWith("/api/v1/escrituracoes/")
+                && !caminho.equals("/api/v1/autorizacoes-consulta")
+                && !caminho.startsWith("/api/v1/autorizacoes-consulta/");
     }
 
     @Override
@@ -51,10 +54,15 @@ final class FiltroTokenLocal extends OncePerRequestFilter {
         }
         byte[] impressao = sha256(token);
         Sacador sacador = null;
+        FinanciadorAutenticado financiador = null;
         try {
             for (var credencial : configuracao.tokens()) {
                 if (MessageDigest.isEqual(impressao, HexFormat.of().parseHex(credencial.sha256()))) {
-                    sacador = sacadores.findById(credencial.sacadorId()).orElse(null);
+                    if (credencial.financiadorId() != null) {
+                        financiador = new FinanciadorAutenticado(credencial.financiadorId());
+                    } else {
+                        sacador = sacadores.findById(credencial.sacadorId()).orElse(null);
+                    }
                     break;
                 }
             }
@@ -65,17 +73,19 @@ final class FiltroTokenLocal extends OncePerRequestFilter {
             SegurancaEscrituracao.erro(response, 500);
             return;
         }
-        if (sacador == null) {
+        if (sacador == null && financiador == null) {
             SegurancaEscrituracao.erro(response, 401);
             return;
         }
-        if (!sacador.habilitado()) {
+        if (sacador != null && !sacador.habilitado()) {
             SegurancaEscrituracao.erro(response, 403);
             return;
         }
         var context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(new SacadorAutenticado(sacador.fotografia()), null,
-                List.of(new SimpleGrantedAuthority("SACADOR_LOCAL"))));
+        ParticipanteAutenticado participante = financiador != null ? financiador : new SacadorAutenticado(sacador.fotografia());
+        String papel = financiador != null ? "FINANCIADOR_LOCAL" : "SACADOR_LOCAL";
+        context.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(participante, null,
+                List.of(new SimpleGrantedAuthority(papel))));
         SecurityContextHolder.setContext(context);
         try {
             chain.doFilter(request, response);

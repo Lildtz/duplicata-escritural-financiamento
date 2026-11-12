@@ -46,6 +46,9 @@ class SignatariaApplicationTests {
             var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/escrituracoes/manuais"))
                     .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString("{}")).build();
             assertThat(client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode()).isEqualTo(401);
+            var autorizacao = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/autorizacoes-consulta"))
+                    .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString("{}")).build();
+            assertThat(client.send(autorizacao, HttpResponse.BodyHandlers.discarding()).statusCode()).isEqualTo(401);
         }
     }
 

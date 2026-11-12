@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -40,6 +41,10 @@ public class SegurancaEscrituracao {
                             .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll();
                     if (local) {
                         requests.requestMatchers("/api/v1/escrituracoes/**").hasAuthority("SACADOR_LOCAL");
+                        requests.requestMatchers(HttpMethod.POST, "/api/v1/autorizacoes-consulta").hasAuthority("FINANCIADOR_LOCAL")
+                                .requestMatchers(HttpMethod.PUT, "/api/v1/autorizacoes-consulta/*/decisao").hasAuthority("SACADOR_LOCAL")
+                                .requestMatchers(HttpMethod.GET, "/api/v1/autorizacoes-consulta/*").hasAnyAuthority("SACADOR_LOCAL", "FINANCIADOR_LOCAL")
+                                .requestMatchers(HttpMethod.DELETE, "/api/v1/autorizacoes-consulta/*").hasAnyAuthority("SACADOR_LOCAL", "FINANCIADOR_LOCAL");
                     }
                     requests.anyRequest().denyAll();
                 })

@@ -12,6 +12,14 @@ import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 class TokensLocaisTests {
 
     @Test
+    void exigeUmUnicoPapelPorCredencial() {
+        UUID id = UUID.randomUUID();
+        new TokensLocais(List.of(new TokensLocais.Credencial("a".repeat(64), null, id)));
+        assertThatIllegalArgumentException().isThrownBy(() -> new TokensLocais.Credencial("a".repeat(64), id, id));
+        assertThatIllegalArgumentException().isThrownBy(() -> new TokensLocais.Credencial("a".repeat(64), null, null));
+    }
+
+    @Test
     void naoAceitaConfiguracaoAusenteOuVazia() {
         assertThatIllegalArgumentException().isThrownBy(() -> new TokensLocais(null));
         assertThatIllegalArgumentException().isThrownBy(() -> new TokensLocais(List.of()));

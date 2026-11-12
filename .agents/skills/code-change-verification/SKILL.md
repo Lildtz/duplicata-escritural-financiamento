@@ -83,7 +83,7 @@ Quando fizer sentido validar apenas um módulo primeiro:
 ou:
 
 ```powershell
-.\gradlew.bat :duplicata-escritural-escrituradora-api:build
+.\gradlew.bat :duplicata-escritural-signataria-api:build
 ```
 
 O build completo deve ser executado quando a mudança puder impactar mais de um módulo.

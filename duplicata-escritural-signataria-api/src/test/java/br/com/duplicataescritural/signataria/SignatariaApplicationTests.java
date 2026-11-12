@@ -1,4 +1,4 @@
-package br.com.duplicataescritural.escrituradora;
+package br.com.duplicataescritural.signataria;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @Testcontainers
 @SpringBootTest
-class EscrituradoraApplicationTests {
+class SignatariaApplicationTests {
 
     @Container
     @ServiceConnection

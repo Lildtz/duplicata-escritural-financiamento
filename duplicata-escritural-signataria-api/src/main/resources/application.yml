@@ -1,6 +1,6 @@
 spring:
   application:
-    name: duplicata-escritural-escrituradora-api
+    name: duplicata-escritural-signataria-api
   datasource:
     url: jdbc:postgresql://${ESCRITURADORA_DB_HOST:localhost}:${ESCRITURADORA_DB_PORT:5432}/${ESCRITURADORA_DB_NAME:escrituradora}
     username: ${ESCRITURADORA_DB_USERNAME:escrituradora}

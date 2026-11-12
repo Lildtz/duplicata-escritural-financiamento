@@ -120,21 +120,21 @@ O projeto utiliza um monorepo Gradle multi-project.
 
 O nome lógico do projeto raiz no Gradle é `duplicata-escritural-plataforma`. A pasta do repositório permanece `duplicata-escritural-financiamento`; esse caminho não define o nome lógico nem exige renomeação.
 
-Após a alteração do nome lógico, reimporte o projeto Gradle no IntelliJ para atualizar referências locais ao nome raiz; não edite nem versione os metadados gerados em `.idea/`.
+Após alterações dos nomes do projeto raiz ou dos subprojetos, reimporte o projeto Gradle no IntelliJ para atualizar referências locais; não edite nem versione os metadados gerados em `.idea/`.
 
 ## Componentes implementados
 
 Existem apenas dois subprojetos, ambos aplicações Spring Boot iniciais, sem capacidades de negócio ou integrações entre aplicações implementadas:
 
 * `duplicata-escritural-financiamento-api`: bootstrap da aplicação e configuração do Actuator;
-* `duplicata-escritural-escrituradora-api`: bootstrap, Actuator e infraestrutura PostgreSQL/JPA/Flyway configurada, com teste de integração via Testcontainers; ainda sem entidades ou migrations de negócio.
+* `duplicata-escritural-signataria-api`: aplicação existente renomeada conforme o ADR 0003, com bootstrap, Actuator e infraestrutura PostgreSQL/JPA/Flyway configurada, com teste de integração via Testcontainers; ainda sem entidades ou migrations de negócio.
 
 Estrutura existente (pasta do repositório preservada):
 
 ```text
 duplicata-escritural-financiamento/
 ├── duplicata-escritural-financiamento-api/
-├── duplicata-escritural-escrituradora-api/
+├── duplicata-escritural-signataria-api/
 ├── docs/
 ├── infra/
 ├── .agents/
@@ -150,20 +150,22 @@ duplicata-escritural-financiamento/
 
 Interoperabilidade/Base de Controle, MCP, Agent, Spring AI e as capacidades de negócio descritas abaixo são planejados. O nome `duplicata-escritural-interoperabilidade-api` é uma referência de planejamento; não é um subprojeto existente.
 
-O subprojeto existente ainda se chama `duplicata-escritural-escrituradora-api`. O [ADR 0003](docs/adr/0003-consolidacao-papeis-signataria.md) aceita a alternativa B: evoluir e renomear essa aplicação para `duplicata-escritural-signataria-api`, preservando uma única aplicação executável com capacidades distintas de Escrituração e Registro. A decisão está aceita, mas a migração e as capacidades de negócio ainda não foram implementadas; não será criada uma aplicação adicional que duplique a Escrituradora.
+A aplicação existente foi renomeada de `duplicata-escritural-escrituradora-api` para `duplicata-escritural-signataria-api`, conforme a alternativa B aceita no [ADR 0003](docs/adr/0003-consolidacao-papeis-signataria.md). Signatária é a aplicação executável; Escrituração e Registro são capacidades de negócio planejadas, ainda não implementadas. A renomeação preserva uma única aplicação, sem criar módulos internos antecipadamente. Interoperabilidade permanece uma aplicação futura.
 
-Fluxo conceitual da primeira versão conforme o ADR 0003 aceito (a renomeação, as portas e as integrações ainda não estão implementadas):
+A identidade de persistência foi preservada: banco e schema `escrituradora`, variáveis `ESCRITURADORA_DB_*`, serviço `postgres-escrituradora`, volume `postgres-escrituradora-data`, credenciais, conexões e configurações Flyway/JPA permanecem inalterados. A porta HTTP continua 8081. A renomeação não implica migração física dos dados.
+
+Fluxo conceitual da primeira versão conforme o ADR 0003 aceito (a aplicação Signatária já foi renomeada; as portas, capacidades de negócio e integrações ainda não estão implementadas):
 
 ```text
 duplicata-escritural-financiamento-api
         |
         | GatewayRegistradora
         v
-duplicata-escritural-signataria-api (evolução da escrituradora-api; implementação pendente)
+duplicata-escritural-signataria-api (aplicação existente; capacidades planejadas)
         |
         | GatewayInteroperabilidade, quando necessário
         v
-duplicata-escritural-interoperabilidade-api
+duplicata-escritural-interoperabilidade-api (aplicação futura)
 ```
 
 O Financiamento não deve implementar lógica de roteamento ou interoperabilidade. O ADR 0003 define as fronteiras e a consolidação das capacidades na aplicação existente; os contratos concretos das portas serão refinados nos primeiros casos de uso. Interoperabilidade continua futura e só será criada quando houver um caso de uso que justifique a aplicação independente.
@@ -218,13 +220,13 @@ Nesse cenário simplificado, o financiamento não precisará conhecer outros par
 
 O financiamento não descobre nem escolhe onde um Sacador, uma Duplicata ou uma Agenda está mantido.
 
-## Signatária B3-like — decisão aceita, implementação pendente
+## Signatária B3-like — aplicação existente, capacidades planejadas
 
-A infraestrutura B3-like simulará os papéis de mercado descritos abaixo. O ADR 0003 aceita a evolução e renomeação da aplicação existente `duplicata-escritural-escrituradora-api`, sem criar uma aplicação adicional para duplicar essas responsabilidades.
+A aplicação existente `duplicata-escritural-signataria-api`, renomeada conforme o ADR 0003, simulará os papéis de mercado descritos abaixo. As capacidades de Escrituração e Registro permanecem planejadas, sem uma aplicação adicional para duplicar essas responsabilidades.
 
 Essa Signatária é B3-like porque os contratos públicos da B3 são a referência documental adotada. Isso não transforma o projeto em uma implementação oficial da B3 nem autoriza inferir comportamentos não documentados.
 
-O mock terá funções distintas dentro da mesma aplicação executável, conforme a decisão aceita no ADR 0003, ainda não implementada:
+O mock terá as funções planejadas abaixo dentro da mesma aplicação executável, conforme a decisão aceita no ADR 0003; essas capacidades ainda não foram implementadas:
 
 ```text
 Signatária B3-like
@@ -294,7 +296,7 @@ O Ambiente de Interoperabilidade não é acessado diretamente pelo Financiamento
 
 Quando utilizar fixtures ou respostas remotas simuladas, documente que isso existe apenas para testar a interoperabilidade sem implementar uma segunda Signatária.
 
-Os componentes planejados de Signatária e Interoperabilidade serão mocks/simuladores criados exclusivamente para este projeto.
+A aplicação Signatária existente e a futura aplicação de Interoperabilidade destinam-se a mocks/simuladores criados exclusivamente para este projeto; suas capacidades de negócio permanecem planejadas.
 
 Nunca assuma acesso real aos ambientes da B3 ou de qualquer participante do mercado.
 
@@ -504,7 +506,7 @@ Um novo serviço deve possuir justificativa concreta como:
 
 Exemplos de justificativa válida:
 
-A aplicação existente `duplicata-escritural-escrituradora-api` representa uma infraestrutura externa ao Agente Financiador. Sua evolução para Signatária, aceita no ADR 0003, preserva uma única aplicação executável e ainda não foi implementada.
+A aplicação existente `duplicata-escritural-signataria-api` representa uma infraestrutura externa ao Agente Financiador. Sua renomeação conforme o ADR 0003 preservou uma única aplicação executável; as capacidades de Escrituração e Registro permanecem planejadas.
 
 O Ambiente de Interoperabilidade é independente porque representa uma infraestrutura externa à Signatária e possui responsabilidade própria de roteamento.
 
@@ -659,14 +661,14 @@ ou quando o tipo arquitetural for relevante:
 duplicata-escritural-{capacidade}-{tipo}
 ```
 
-Aplicações existentes (nomes preservados):
+Aplicações existentes:
 
 ```text
 duplicata-escritural-financiamento-api
-duplicata-escritural-escrituradora-api
+duplicata-escritural-signataria-api
 ```
 
-Nomenclatura aceita no ADR 0003 para a evolução da aplicação existente, ainda não implementada: `duplicata-escritural-signataria-api`.
+O nome `duplicata-escritural-signataria-api` implementa a renomeação aceita no ADR 0003; o nome anterior permanece nos registros históricos e nos identificadores de persistência preservados.
 
 Referências de nomenclatura para outros componentes planejados, sem criação automática:
 
@@ -994,7 +996,7 @@ HIPÓTESE ARQUITETURAL
 
 Nunca apresente comportamento criado para o mock como se fosse contrato oficial de uma instituição.
 
-Os contratos públicos da B3 são a referência documental do projeto. A Signatária planejada será uma simulação B3-like, não uma implementação oficial, e a topologia do repositório não representa a topologia física real da B3 ou do mercado brasileiro.
+Os contratos públicos da B3 são a referência documental do projeto. As capacidades planejadas da aplicação Signatária serão uma simulação B3-like, não uma implementação oficial, e a topologia do repositório não representa a topologia física real da B3 ou do mercado brasileiro.
 
 Não modele instituições reais adicionais como participantes implementados. Quando um cenário exigir outra ponta para testar interoperabilidade, utilize um identificador genérico, como `SIGNATARIA_EXTERNA_001`, e documente que a resposta é simulada.
 
@@ -1051,7 +1053,7 @@ Não apresente apenas a solução escolhida.
 
 Uma boa decisão arquitetural deve conseguir explicar por que alternativas foram descartadas.
 
-Preserve o histórico dos ADRs: não reescreva decisões anteriores para refletir decisões posteriores. O ADR 0003 está aceito, com implementação pendente: adota a alternativa B, evoluindo e renomeando a aplicação existente para Signatária com capacidades distintas de Escrituração e Registro. Os ADRs 0001 e 0002 permanecem históricos; eventuais conflitos de negócio ou interoperabilidade devem ser conciliados antes da implementação. O registro documental não executa a renomeação; nomes e métodos concretos das portas serão refinados nos primeiros casos de uso.
+Preserve o histórico dos ADRs: não reescreva decisões anteriores para refletir decisões posteriores. O ADR 0003 está aceito e a renomeação da aplicação existente para Signatária foi implementada; as capacidades distintas de Escrituração e Registro e as integrações permanecem planejadas. Os ADRs 0001, 0002 e 0003 permanecem históricos, inclusive suas descrições do estado anterior à renomeação; eventuais conflitos de negócio ou interoperabilidade devem ser conciliados antes da implementação. Nomes e métodos concretos das portas serão refinados nos primeiros casos de uso.
 
 Toda revisão arquitetural deve responder:
 

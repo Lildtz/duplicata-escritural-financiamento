@@ -179,7 +179,7 @@ Exemplo:
 
 `MotorElegibilidade` não deve virar microsserviço apenas porque possui responsabilidade própria.
 
-`duplicata-escritural-escrituradora-api` é um serviço separado porque representa uma infraestrutura externa ao financiamento.
+`duplicata-escritural-signataria-api` é um serviço separado porque representa uma infraestrutura externa ao financiamento.
 
 ---
 

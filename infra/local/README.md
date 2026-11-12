@@ -5,8 +5,11 @@ O nome lógico do projeto Gradle continua `duplicata-escritural-plataforma`.
 
 `duplicata-escritural-signataria-api` é a aplicação existente, anteriormente chamada
 `duplicata-escritural-escrituradora-api`. A renomeação prevista no ADR 0003 preserva
-o comportamento atual de bootstrap, Actuator e persistência. Escrituração e Registro
-são capacidades de negócio planejadas, ainda sem módulos ou funcionalidades.
+o comportamento de bootstrap, Actuator e persistência. A primeira entrega de
+Escrituração implementa recebimento e consulta de solicitações, sempre `PENDENTE`.
+O [guia de Escrituração Manual](../../docs/escrituracao-manual.md) descreve o contrato,
+o cadastro local do Sacador e o provisionamento de tokens sem segredos versionados.
+Execução da escrituração, Duplicata e Registro continuam planejados.
 `duplicata-escritural-interoperabilidade-api` é uma aplicação futura.
 
 Inicie o PostgreSQL com Docker disponível:
@@ -15,6 +18,9 @@ Inicie o PostgreSQL com Docker disponível:
 docker compose -f infra/local/docker-compose.yml up -d postgres-escrituradora
 .\gradlew.bat :duplicata-escritural-signataria-api:bootRun
 ```
+
+Sem perfil `local`, as rotas de Escrituração ficam bloqueadas. Essa primeira
+inicialização permite aplicar as migrations antes do provisionamento descrito no guia.
 
 A aplicação continua na porta 8081, com health check em
 `http://localhost:8081/actuator/health` e exposição de Actuator `health,info`.
@@ -42,7 +48,8 @@ Para validar o projeto:
 O teste `SignatariaApplicationTests` utiliza Testcontainers com PostgreSQL
 `postgres:18-alpine`, verifica a inicialização do contexto Spring, a conexão,
 o histórico Flyway no schema `escrituradora` e executa `flyway.validate()`.
-Ele requer Docker disponível e não utiliza o banco persistente do Compose.
+Os testes HTTP também usam PostgreSQL descartável e tokens aleatórios gerados
+durante a execução. Eles requerem Docker e não utilizam o banco persistente do Compose.
 
 Reimporte o projeto Gradle no IntelliJ após a renomeação e atualize eventuais
 configurações locais de execução para `br.com.duplicataescritural.signataria.SignatariaApplication`.

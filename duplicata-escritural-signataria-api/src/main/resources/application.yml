@@ -1,6 +1,10 @@
 spring:
   application:
     name: duplicata-escritural-signataria-api
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+      accept-float-as-int: false
   datasource:
     url: jdbc:postgresql://${ESCRITURADORA_DB_HOST:localhost}:${ESCRITURADORA_DB_PORT:5432}/${ESCRITURADORA_DB_NAME:escrituradora}
     username: ${ESCRITURADORA_DB_USERNAME:escrituradora}

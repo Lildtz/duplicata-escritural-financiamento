@@ -124,10 +124,10 @@ Após alterações dos nomes do projeto raiz ou dos subprojetos, reimporte o pro
 
 ## Componentes implementados
 
-Existem apenas dois subprojetos, ambos aplicações Spring Boot iniciais, sem capacidades de negócio ou integrações entre aplicações implementadas:
+Existem apenas dois subprojetos Spring Boot, sem integrações entre aplicações implementadas:
 
 * `duplicata-escritural-financiamento-api`: bootstrap da aplicação e configuração do Actuator;
-* `duplicata-escritural-signataria-api`: aplicação existente renomeada conforme o ADR 0003, com bootstrap, Actuator e infraestrutura PostgreSQL/JPA/Flyway configurada, com teste de integração via Testcontainers; ainda sem entidades ou migrations de negócio.
+* `duplicata-escritural-signataria-api`: aplicação existente renomeada conforme o ADR 0003, com Actuator, PostgreSQL/JPA/Flyway e recebimento durável e consulta de Escrituração Manual. Possui Sacador local, CNPJ numérico/alfanumérico, autenticação Bearer exclusivamente local e idempotência transacional. Os processamentos permanecem `PENDENTE`; ainda não existem processamento assíncrono, entidade Duplicata ou capacidades de Registro. Ver [contrato e operação local](docs/escrituracao-manual.md).
 
 Estrutura existente (pasta do repositório preservada):
 
@@ -148,13 +148,13 @@ duplicata-escritural-financiamento/
 
 ## Componentes e capacidades planejados
 
-Interoperabilidade/Base de Controle, MCP, Agent, Spring AI e as capacidades de negócio descritas abaixo são planejados. O nome `duplicata-escritural-interoperabilidade-api` é uma referência de planejamento; não é um subprojeto existente.
+Interoperabilidade/Base de Controle, MCP, Agent, Spring AI e as demais capacidades de negócio descritas abaixo são planejados. O nome `duplicata-escritural-interoperabilidade-api` é uma referência de planejamento; não é um subprojeto existente.
 
-A aplicação existente foi renomeada de `duplicata-escritural-escrituradora-api` para `duplicata-escritural-signataria-api`, conforme a alternativa B aceita no [ADR 0003](docs/adr/0003-consolidacao-papeis-signataria.md). Signatária é a aplicação executável; Escrituração e Registro são capacidades de negócio planejadas, ainda não implementadas. A renomeação preserva uma única aplicação, sem criar módulos internos antecipadamente. Interoperabilidade permanece uma aplicação futura.
+A aplicação existente foi renomeada de `duplicata-escritural-escrituradora-api` para `duplicata-escritural-signataria-api`, conforme a alternativa B aceita no [ADR 0003](docs/adr/0003-consolidacao-papeis-signataria.md). Signatária é a aplicação executável; Escrituração possui somente recebimento e consulta de solicitações implementados. A execução da escrituração e a capacidade de Registro permanecem planejadas. A renomeação preserva uma única aplicação. Interoperabilidade permanece uma aplicação futura.
 
 A identidade de persistência foi preservada: banco e schema `escrituradora`, variáveis `ESCRITURADORA_DB_*`, serviço `postgres-escrituradora`, volume `postgres-escrituradora-data`, credenciais, conexões e configurações Flyway/JPA permanecem inalterados. A porta HTTP continua 8081. A renomeação não implica migração física dos dados.
 
-Fluxo conceitual da primeira versão conforme o ADR 0003 aceito (a aplicação Signatária já foi renomeada; as portas, capacidades de negócio e integrações ainda não estão implementadas):
+Fluxo conceitual da primeira versão conforme o ADR 0003 aceito (a aplicação Signatária já foi renomeada; as portas e integrações ainda não estão implementadas):
 
 ```text
 duplicata-escritural-financiamento-api
@@ -222,11 +222,11 @@ O financiamento não descobre nem escolhe onde um Sacador, uma Duplicata ou uma 
 
 ## Signatária B3-like — aplicação existente, capacidades planejadas
 
-A aplicação existente `duplicata-escritural-signataria-api`, renomeada conforme o ADR 0003, simulará os papéis de mercado descritos abaixo. As capacidades de Escrituração e Registro permanecem planejadas, sem uma aplicação adicional para duplicar essas responsabilidades.
+A aplicação existente `duplicata-escritural-signataria-api`, renomeada conforme o ADR 0003, simulará os papéis de mercado descritos abaixo. Escrituração possui apenas recebimento e consulta de solicitações implementados; as demais capacidades permanecem planejadas, sem uma aplicação adicional para duplicar essas responsabilidades.
 
 Essa Signatária é B3-like porque os contratos públicos da B3 são a referência documental adotada. Isso não transforma o projeto em uma implementação oficial da B3 nem autoriza inferir comportamentos não documentados.
 
-O mock terá as funções planejadas abaixo dentro da mesma aplicação executável, conforme a decisão aceita no ADR 0003; essas capacidades ainda não foram implementadas:
+O mock terá as funções abaixo dentro da mesma aplicação executável, conforme a decisão aceita no ADR 0003; somente Sacador local e recebimento/consulta de ProcessamentoEscrituracao estão implementados:
 
 ```text
 Signatária B3-like
@@ -296,7 +296,7 @@ O Ambiente de Interoperabilidade não é acessado diretamente pelo Financiamento
 
 Quando utilizar fixtures ou respostas remotas simuladas, documente que isso existe apenas para testar a interoperabilidade sem implementar uma segunda Signatária.
 
-A aplicação Signatária existente e a futura aplicação de Interoperabilidade destinam-se a mocks/simuladores criados exclusivamente para este projeto; suas capacidades de negócio permanecem planejadas.
+A aplicação Signatária existente e a futura aplicação de Interoperabilidade destinam-se a mocks/simuladores criados exclusivamente para este projeto; além do recebimento e consulta de Escrituração, suas capacidades de negócio permanecem planejadas.
 
 Nunca assuma acesso real aos ambientes da B3 ou de qualquer participante do mercado.
 
@@ -506,7 +506,7 @@ Um novo serviço deve possuir justificativa concreta como:
 
 Exemplos de justificativa válida:
 
-A aplicação existente `duplicata-escritural-signataria-api` representa uma infraestrutura externa ao Agente Financiador. Sua renomeação conforme o ADR 0003 preservou uma única aplicação executável; as capacidades de Escrituração e Registro permanecem planejadas.
+A aplicação existente `duplicata-escritural-signataria-api` representa uma infraestrutura externa ao Agente Financiador. Sua renomeação conforme o ADR 0003 preservou uma única aplicação executável; além do recebimento e consulta de Escrituração, as capacidades permanecem planejadas.
 
 O Ambiente de Interoperabilidade é independente porque representa uma infraestrutura externa à Signatária e possui responsabilidade própria de roteamento.
 
@@ -1053,7 +1053,7 @@ Não apresente apenas a solução escolhida.
 
 Uma boa decisão arquitetural deve conseguir explicar por que alternativas foram descartadas.
 
-Preserve o histórico dos ADRs: não reescreva decisões anteriores para refletir decisões posteriores. O ADR 0003 está aceito e a renomeação da aplicação existente para Signatária foi implementada; as capacidades distintas de Escrituração e Registro e as integrações permanecem planejadas. Os ADRs 0001, 0002 e 0003 permanecem históricos, inclusive suas descrições do estado anterior à renomeação; eventuais conflitos de negócio ou interoperabilidade devem ser conciliados antes da implementação. Nomes e métodos concretos das portas serão refinados nos primeiros casos de uso.
+Preserve o histórico dos ADRs: não reescreva decisões anteriores para refletir decisões posteriores. O ADR 0003 está aceito e a renomeação da aplicação existente para Signatária foi implementada. Escrituração possui recebimento e consulta de solicitações; sua execução, a geração do IUD, Registro e integrações permanecem planejados. Os ADRs 0001, 0002 e 0003 permanecem históricos, inclusive suas descrições do estado anterior à renomeação; eventuais conflitos de negócio ou interoperabilidade devem ser conciliados antes da implementação. Nomes e métodos concretos das portas serão refinados nos primeiros casos de uso.
 
 Toda revisão arquitetural deve responder:
 

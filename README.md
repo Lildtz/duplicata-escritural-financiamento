@@ -62,10 +62,12 @@ O progresso de cada componente deverá ser atualizado conforme entregas verifica
 | Integração assíncrona com Kafka | Evolução prevista |
 
 ## Evolução do projeto
+O desenvolvimento segue entregas incrementais, priorizando funcionalidades verificáveis, testes automatizados e decisões arquiteturais justificadas.
 
-O desenvolvimento seguirá entregas incrementais, priorizando funcionalidades verificáveis e decisões arquiteturais justificadas.
+Cada entrega relevante deve manter atualizados o estado dos componentes, as instruções de execução e a documentação técnica.
 
-Cada evolução relevante deverá atualizar o estado dos componentes, as instruções de execução e a documentação das decisões técnicas.
+Consulte o [Roadmap do Projeto](docs/roadmap.md) para acompanhar
+as fases planejadas, os entregáveis e o progresso da implementação.
 
 ## Referências e limitações
 

@@ -23,8 +23,20 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.testcontainers:testcontainers-junit-jupiter")
+    testImplementation("org.testcontainers:testcontainers-postgresql")
 }
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    // A validação vertical usa somente o artefato executável, sem importar classes da Signatária.
+    dependsOn(":duplicata-escritural-signataria-api:bootJar")
+    val jarSignataria = providers.provider {
+        project(":duplicata-escritural-signataria-api")
+            .tasks.named<Jar>("bootJar").get().archiveFile.get().asFile
+    }
+    inputs.file(jarSignataria).withPropertyName("signatariaBootJar").withPathSensitivity(PathSensitivity.NONE)
+    doFirst {
+        systemProperty("signataria.jar", jarSignataria.get().absolutePath)
+    }
 }

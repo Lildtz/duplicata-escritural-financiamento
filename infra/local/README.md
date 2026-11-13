@@ -55,3 +55,26 @@ durante a execução. Eles requerem Docker e não utilizam o banco persistente d
 Reimporte o projeto Gradle no IntelliJ após a renomeação e atualize eventuais
 configurações locais de execução para `br.com.duplicataescritural.signataria.SignatariaApplication`.
 Os metadados gerados em `.idea/` não devem ser editados ou versionados por esta refatoração.
+
+## Validação vertical Banco DUP–Signatária (Entrega 3.4)
+
+Com Java 21 e Docker disponíveis, execute na raiz:
+
+```powershell
+.\gradlew.bat :duplicata-escritural-financiamento-api:test --tests '*FluxoConsultaAutorizadaVerticalTests'
+```
+
+O teste gera e inicia o JAR real da Signatária com perfil `local`, porta dinâmica,
+PostgreSQL descartável, Flyway e agendador habilitado. O Banco DUP usa seu contexto
+Spring e `RestClient`, sem servidor HTTP de entrada. A fixture provisiona apenas
+Sacadores e credenciais efêmeras; duplicatas e autorizações são criadas pelos
+contratos HTTP reais. Não requer `bootRun`, Compose ou tokens configurados manualmente.
+Os dados persistentes locais não são utilizados. Contextos, processo e container
+são encerrados ao final; logs temporários são preservados apenas em falha.
+
+O fluxo inclui Escrituração → processamento CONCLUIDO → autorização PENDENTE →
+aprovação pelo Sacador → ATIVA → consulta paginada. Há verificações de isolamento,
+recusa, revogação entre páginas, expiração, idempotência e paginação inválida.
+A suíte também é executada por `.\gradlew.bat clean build`.
+Veja [pré-condições, sequência e limitações](../../docs/autorizacao-consulta.md#entrega-34--validação-vertical).
+A aprovação técnica final da 3.4 foi registrada em 13/11/2026; o versionamento permanece pendente de autorização explícita.

@@ -1,10 +1,10 @@
-# Entrega 3 — autorização, consulta local e integração HTTP (3.1, 3.2 e 3.3)
+# Entrega 3 — autorização, consulta local, integração HTTP e validação vertical
 
 Esta capacidade é uma **simplificação do simulador**, não um Opt-in regulatório
 completo nem um contrato oficial B3. A Entrega 3.2 permite consulta autorizada de
 Duplicatas locais pelo Financiador. Não implementa Registro, Agenda regulatória
 completa. Os contratos da Signatária das Entregas 3.1/3.2 são consumidos pelo Banco DUP
-na Entrega 3.3, descrita ao final deste guia. Não comprova anuência
+na Entrega 3.3, com validação vertical na 3.4, descritas neste guia. Não comprova anuência
 jurídica de representantes humanos. Os ADRs 0001–0003 permanecem preservados.
 
 O package funcional é `consultarecebiveis`, com `api`, `aplicacao`, `dominio` e
@@ -262,7 +262,7 @@ novamente aprovados na preparação da 3.3.
 ## Entrega 3.3 — integração HTTP do Banco DUP
 
 **Implementada e validada; aprovação técnica final registrada em 13/11/2026, após Code Review e revisão corretiva favoráveis.** O fluxo vertical
-entre as duas aplicações continua planejado para a Entrega 3.4.
+entre as duas aplicações não foi executado na 3.3; sua validação está na seção da 3.4.
 
 ### Fronteira e casos de uso
 
@@ -464,3 +464,144 @@ mantém os estados. Os ADRs históricos foram preservados. Após o aceite da pro
 pontual, `AGENTS.md` foi atualizado na preparação do encerramento para descrever
 a integração existente, a porta implementada e as capacidades que continuam futuras,
 sem alterar as fronteiras arquiteturais ou presumir aprovação formal das entregas.
+
+## Entrega 3.4 — validação vertical
+
+**Implementada e validada; aprovação técnica final do Code Review registrada em 13/11/2026. Versionamento pendente de autorização explícita.**
+A 3.3 foi encerrada e versionada em `04081ca`. Esta validação não acrescenta
+capacidades de negócio, endpoints ou mudanças de segurança às aplicações.
+
+### Ambiente e reprodução
+
+Requisitos: Java 21, Docker disponível e Gradle Wrapper do repositório. Na raiz:
+
+```powershell
+.\gradlew.bat :duplicata-escritural-financiamento-api:test --tests '*FluxoConsultaAutorizadaVerticalTests'
+.\gradlew.bat clean build
+git diff --check
+```
+
+O teste está em `financiamento.consultarecebiveis.integracao`, no source set de
+testes do Banco DUP. A tarefa `test` gera o `bootJar` da Signatária e fornece seu
+caminho à fixture `SignatariaReal`; não inclui classes da Signatária no classpath
+do Banco DUP. O artefato é registrado como input `signatariaBootJar` da tarefa,
+com `PathSensitivity.NONE`, para rastrear alterações de conteúdo independentemente
+de seu caminho. Foram reutilizados os módulos Testcontainers JUnit/PostgreSQL já
+adotados na Signatária, agora também como dependências de teste do Financiamento.
+Awaitility vem do starter de testes existente.
+
+A fixture inicia PostgreSQL `postgres:18-alpine` descartável e o JAR da Signatária
+em JVM separada, com `server.port=0`, loopback e perfil `local`. Descobre a porta
+no log de bootstrap e confirma `/actuator/health`. A Signatária aplica Flyway
+V1–V3 e valida o schema JPA. A fixture confere as três migrations bem-sucedidas.
+Não é necessário iniciar Compose nem ocupar previamente as portas 8080/8081.
+
+São provisionados três Sacadores habilitados, dois Financiadores e Bearers
+aleatórios por execução. Os CNPJs fictícios são `12ABC34501DE35` (principal,
+alfanumérico), `11222333000181` (outro Sacador) e `11444777000161` (sem títulos).
+O UUID do Financiador principal coincide intencionalmente com o do Sacador
+principal para exercitar a separação de papéis. Somente hashes dos Bearers são
+provisionados na Signatária, por configuração efêmera no ambiente do processo.
+Não são gravados tokens ou arquivos de credenciais. O teste verifica ausência
+dos Bearers no log da Signatária.
+
+O único acesso SQL da fixture provisiona o cadastro dos Sacadores, que não tem
+endpoint, e confere Flyway. Não insere nem altera autorizações, processamentos ou
+duplicatas. As operações do Banco DUP continuam exclusivamente por HTTP.
+Os contextos do Banco DUP usam `FinanciamentoApplication`, perfil `local` e
+`WebApplicationType.NONE`, sem controller ou servidor público de teste. A
+configuração existente recebe URL dinâmica, Bearer e timeouts de 2s/5s. O teste
+obtém o bean `ServicoConsultaRecebiveis` e verifica o adapter real.
+
+### Sequência comprovada
+
+1. O Sacador envia POST `/api/v1/escrituracoes/manuais` com chave idempotente;
+   recebe 202, estado PENDENTE e Location do processamento.
+2. O agendador real, habilitado com polling de 100ms, processa as solicitações.
+   O teste consulta GET `/api/v1/escrituracoes/processamentos/{id}` até CONCLUIDO,
+   com prazo de 20s por emissão, sem chamada direta ao worker ou repository.
+3. São escriturados três títulos principais (100.01, 999999999999.99 e 0.01) e
+   um título de outro Sacador. IDs e instantes de Escrituração são recuperados
+   do processamento persistido; os demais dados esperados vêm da emissão.
+4. O Banco DUP solicita autorização pelo serviço, porta e `RestClient` reais.
+   O POST `/api/v1/autorizacoes-consulta` produz PENDENTE e o Financiador correto.
+   Consultar Duplicatas nesse estado lança `FalhaRegistradora(ACESSO_NEGADO)`.
+5. O Sacador correspondente envia PUT `/api/v1/autorizacoes-consulta/{id}/decisao`
+   com APROVAR. O Banco DUP confirma ATIVA, vigente e beneficiário correto via GET.
+6. O Banco DUP consulta GET `/api/v1/autorizacoes-consulta/{id}/duplicatas` nas
+   páginas 0/1 com tamanho 2, uma página além do fim e com os padrões 0/50.
+   Compara os seis campos de cada título com os dados escriturados, usando
+   `BigDecimal`, e confere CNPJ completo, LOCAL_SIMULADO e metadados de paginação.
+   Confere ordenação por `escrituradaEm, id` e repetição determinística da página.
+   Nenhum título de outro Sacador aparece.
+7. Após nova página 0, o Sacador envia DELETE da autorização e recebe 204 após
+   commit. O Banco DUP confirma REVOGADA e a página 1 é negada com ACESSO_NEGADO.
+
+### Cenários negativos e idempotência
+
+| Cenário | Evidência observada |
+|---|---|
+| PENDENTE e RECUSADA | ACESSO_NEGADO no Banco DUP, sem fallback vazio |
+| REVOGADA entre páginas | Próxima página negada após DELETE confirmado |
+| ATIVA expirada | Continua ATIVA, `vigente=false`; nova consulta negada |
+| Outro Financiador | RECURSO_NAO_ENCONTRADO para autorização alheia |
+| ID inexistente | Mesmo 404, código, título e mensagem de recurso alheio |
+| Bearer inválido | AUTENTICACAO_REJEITADA pelo adapter real |
+| Outro Sacador tenta aprovar | HTTP 404 e autorização permanece PENDENTE |
+| Sacador usa endpoint de duplicatas | HTTP 403, mesmo com UUID igual ao Financiador |
+| Sacador sem títulos | Página vazia 0/50, sem próxima página, somente após aprovação |
+| Página negativa, tamanho 0 ou 101 | Validação local e HTTP 400 na Signatária |
+| Repetição idempotente válida | Mesmo ID/representação original e Location, HTTP 201, inclusive após aprovação |
+| Mesma chave/conteúdo diferente | CONFLITO no Banco DUP e HTTP 409 remoto |
+
+`instance` nos Problems 404 ecoa o caminho público solicitado e naturalmente
+difere entre IDs. A comparação verifica a mesma semântica de erro, sem exigir
+igualdade de caminhos diferentes. O primeiro ensaio teve 8/9 casos aprovados;
+a asserção foi corrigida, sem modificar produção, e a execução específica
+seguinte aprovou 9/9 casos.
+
+Validação inicial em 13/11/2026: o comando específico passou em 39s. O build completo
+`.\gradlew.bat clean build` passou em 1min43s com 263 testes: 100 do Financiamento
+(nove verticais) e 163 da Signatária, sem falhas, erros ou ignorados. As regressões
+anteriores foram preservadas. `git diff --check` passou; não houve commit ou push
+nesta entrega. O aviso de CDS do OpenJDK nos testes com instrumentação não impediu
+o build.
+
+Na expiração utiliza-se o relógio real: o fim é solicitado 30s à frente,
+cobrindo quatro chamadas iniciais de até 5s cada, mais 10s de margem. A consulta
+é permitida antes e o teste aguarda `vigente=false` via HTTP por até 45s,
+com 15s adicionais de tolerância. A inicialização tem prazo de 60s;
+cada chamada técnica tem timeout de 5s.
+As esperas verificam condições com Awaitility, sem `Thread.sleep` arbitrário.
+
+Na revisão final do Code Review em 13/11/2026, os nove testes verticais passaram
+com a margem de 30s/45s. Sem alterações, a tarefa ficou `UP-TO-DATE`; ao adicionar
+somente um recurso inerte ao JAR gerado, o Gradle identificou mudança no input
+`signatariaBootJar` e reexecutou os nove casos com sucesso. O artefato original
+foi restaurado e conferido por SHA-256. O novo `.\gradlew.bat clean build`, sem
+exclusões de tarefas, passou em 2min38s: 263 testes (100 do Financiamento e 163 da
+Signatária), sem falhas, erros ou ignorados. `git diff --check` passou.
+
+Os processos e contextos são encerrados ao final e Testcontainers remove o banco.
+Logs temporários são removidos em sucesso; em falha são preservados no diretório
+temporário do JUnit para diagnóstico. Não há limpeza ou escrita no Compose local.
+
+### Limites e decisões
+
+**Problema → alternativas → decisão → trade-offs → consequências:** executar as
+duas aplicações reais sem compartilhar classes → dependência entre projetos de
+produção, execução manual ou JAR em processo separado → JAR real e contexto Spring
+do Banco DUP no teste → maior duração e dependência de Docker/build do artefato,
+com descoberta da porta pelo log de bootstrap → fronteiras preservadas, sem nova
+API, aplicação executável do projeto ou dependência de produção.
+
+O teste comprova o fluxo vertical do simulador. O Banco DUP não inicia servidor
+HTTP, pois não possui endpoints desses casos de uso. Não há integração regulatória
+real, Agenda completa, IUD, interoperabilidade, análise de crédito ou cálculo de
+disponibilidade. `valorNominal` continua sendo valor de emissão, e `consultadaEm`
+continua uma referência local do Banco DUP, sem snapshot entre páginas. Não há
+retry automático, cache ou circuit breaker. Os testes de transporte da 3.3 permanecem.
+Nenhum defeito funcional das entregas anteriores foi identificado nesta validação.
+AGENTS e ADRs continuam coerentes e não foram alterados. A aprovação técnica final
+da 3.4 foi registrada em 13/11/2026; o pacote aguarda autorização explícita para
+criar o commit, sem push nesta preparação.

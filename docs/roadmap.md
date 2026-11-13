@@ -8,7 +8,7 @@ O progresso é registrado com base nas implementações conhecidas. Uma funciona
 
 ## Estado atual
 
-**Última entrega: 3.3 — aprovação técnica final registrada em 13/11/2026; commit de encerramento autorizado.**
+**Entrega 3.4 — validação vertical automatizada com aprovação técnica final em 13/11/2026; versionamento pendente de autorização.** A 3.3 foi encerrada no commit `04081ca`, após aprovação técnica final em 13/11/2026.
 
 | Entrega | Descrição                                 | Situação                          |
 | ------- | ----------------------------------------- | --------------------------------- |
@@ -17,8 +17,8 @@ O progresso é registrado com base nas implementações conhecidas. Uma funciona
 | 2       | Processamento assíncrono de Escrituração  | Implementada                      |
 | 3.1     | Identidades e autorização de consulta     | Implementada                      |
 | 3.2     | Consulta local protegida de recebíveis    | Aprovação técnica retrospectiva em 13/11/2026 |
-| 3.3     | Integração HTTP do Banco DUP              | Aprovação técnica final em 13/11/2026 |
-| 3.4     | Validação vertical do fluxo               | Planejada                         |
+| 3.3     | Integração HTTP do Banco DUP              | Aprovação técnica final em 13/11/2026; versionada em `04081ca` |
+| 3.4     | Validação vertical do fluxo               | Aprovação técnica final em 13/11/2026; versionamento pendente de autorização |
 
 ---
 
@@ -187,16 +187,53 @@ O fluxo real entre as duas aplicações não foi executado nesta entrega; perman
 
 ### 3.4 — Validação vertical
 
-**Situação: planejada.**
+**Situação: validação vertical implementada e executada com sucesso; aprovação técnica final do Code Review registrada em 13/11/2026. Versionamento pendente de autorização explícita.**
 
-- [ ] Executar ambas as aplicações integradas.
-- [ ] Validar solicitação de autorização pelo Banco DUP.
-- [ ] Validar aprovação pelo Sacador.
-- [ ] Consultar recebíveis autorizados pelo Banco DUP.
-- [ ] Validar recusa, revogação e expiração.
-- [ ] Testar isolamento entre participantes.
-- [ ] Executar regressões das entregas anteriores.
-- [ ] Documentar a execução local completa.
+- [x] Executar ambas as aplicações integradas.
+- [x] Validar solicitação de autorização pelo Banco DUP.
+- [x] Validar aprovação pelo Sacador.
+- [x] Consultar recebíveis autorizados pelo Banco DUP.
+- [x] Validar recusa, revogação e expiração.
+- [x] Testar isolamento entre participantes.
+- [x] Executar regressões das entregas anteriores.
+- [x] Documentar a execução automatizada completa em ambiente descartável.
+- [x] Registrar aprovação técnica final do Code Review da 3.4 em 13/11/2026.
+
+**Evidências:** `FluxoConsultaAutorizadaVerticalTests` executa nove casos com
+PostgreSQL `postgres:18-alpine`/Testcontainers e V1–V3 aplicadas pela Signatária real.
+O teste do Banco DUP depende apenas do JAR executável da Signatária, iniciado em
+processo separado, com HTTP em porta dinâmica, perfil `local`, Bearers provisionados
+e agendador real. O contexto Spring do Banco DUP obtém `ServicoConsultaRecebiveis`
+e utiliza a configuração existente de `GatewayRegistradoraHttp`/`RestClient`.
+
+São criadas três Duplicatas por Escrituração Manual para o Sacador principal,
+mais uma de outro Sacador para verificar isolamento. Também há um Sacador sem
+títulos e dois Financiadores. Foram verificados PENDENTE/ATIVA, recusa, revogação
+entre páginas, expiração real, 404 genérico, Bearer inválido, decisão por Sacador
+alheio, paginação, precisão decimal, repetição 201/Location e conflito 409.
+Não houve defeito funcional confirmado nem alteração de produção ou migrations.
+Comando e detalhes estão no [guia da 3.4](autorizacao-consulta.md#entrega-34--validação-vertical).
+
+O primeiro ensaio passou em 8/9 casos; a asserção que comparava integralmente
+dois Problems 404 foi corrigida para respeitar `instance`, que contém o caminho
+público solicitado. A execução específica seguinte passou em 9/9 casos.
+Em 13/11/2026, `.\gradlew.bat clean build` passou em 1min43s: 263 testes,
+sendo 100 do Financiamento (incluindo os nove verticais) e 163 da Signatária,
+sem falhas, erros ou ignorados. `git diff --check` também passou.
+
+Após os ajustes finais, o JAR da Signatária passou a ser input rastreável da tarefa
+de teste e a expiração manteve relógio real, com margem de 30s/45s. A prova
+incremental confirmou `UP-TO-DATE` sem mudanças e reexecução ao alterar somente
+o conteúdo do JAR. O build completo seguinte passou em 2min38s, novamente com
+263 testes aprovados, incluindo os nove verticais, sem falhas, erros ou ignorados.
+A aprovação técnica final foi registrada em 13/11/2026; não equivale à autorização
+para criar o commit. O pacote está em preparação para versionamento, sem commit ou push.
+
+**Limites:** o Banco DUP é iniciado sem servidor HTTP, pois os casos de uso não
+possuem endpoints de entrada. A comunicação de saída é HTTP real. O teste exige
+Docker e Java 21; não acessa o banco persistente do Compose nem infraestruturas
+regulatórias. A validação não implica elegibilidade, saldo financiável, Registro,
+IUD ou interoperabilidade. Nenhuma próxima entrega foi iniciada.
 
 **Critério de conclusão da Entrega 3:** fluxo demonstrável de ponta a ponta entre Banco DUP e Signatária, com controles de acesso verificados e documentação reproduzível.
 

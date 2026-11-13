@@ -55,9 +55,9 @@ A presença de uma tecnologia nesta lista não significa que ela já esteja impl
 
 ## Estado do projeto
 
-**Fase de referência: Entrega 3.3 implementada e validada, com aprovação técnica final em 13/11/2026 após Code Review e revisão corretiva favoráveis.** O commit de encerramento foi autorizado separadamente e é verificável no histórico Git.
+**Fase de referência: Entrega 3.4 com validação vertical automatizada e aprovação técnica final em 13/11/2026; versionamento pendente de autorização.** A 3.3 recebeu aprovação técnica final em 13/11/2026 e foi versionada no commit `04081ca`.
 
-As Entregas 1, 2, 3.1 e 3.2 estão implementadas. A 3.2 recebeu aprovação técnica retrospectiva em 13/11/2026, sem evidência de aceite histórico anterior, conforme o [roadmap](docs/roadmap.md). A Entrega 3.4 permanece planejada e validará o fluxo completo entre as duas aplicações.
+As Entregas 1, 2, 3.1 e 3.2 estão implementadas. A 3.2 recebeu aprovação técnica retrospectiva em 13/11/2026, sem evidência de aceite histórico anterior, conforme o [roadmap](docs/roadmap.md). A 3.4 exercita o fluxo completo do simulador, preservando as fronteiras entre as aplicações.
 
 | Frente | Situação documentada |
 |---|---|
@@ -103,7 +103,15 @@ Os casos de uso são beans de aplicação, sem novos endpoints no Banco DUP nest
 
 Consulte [contratos, falhas e limites da integração 3.3](docs/autorizacao-consulta.md#entrega-33--integração-http-do-banco-dup). A paginação é repassada por chamada, sem cache ou retry da aplicação. A autorização é revalidada remotamente em cada página. `valorNominal` não é saldo financiável; `consultadaEm` é uma referência local, sem snapshot entre páginas. O escopo é `LOCAL_SIMULADO`, sem equivalência com Agenda regulatória, Registro, IUD ou disponibilidade financeira.
 
-Os testes da 3.3 exercitam o adapter com respostas simuladas e HTTP descartável do JDK, incluindo configuração, Bearer, falhas e timeouts. A execução conjunta contra a Signatária real do projeto e o fluxo vertical completo ficam para a Entrega 3.4.
+Os testes da 3.3 exercitam o adapter com respostas simuladas e HTTP descartável do JDK, incluindo configuração, Bearer, falhas e timeouts. A 3.4 acrescenta a Signatária real em outro processo e PostgreSQL descartável, com migrations, segurança e agendador ativos. O Banco DUP usa seu contexto Spring no perfil `local`, sem servidor de entrada, e chama o `RestClient` real.
+
+Para executar somente o fluxo vertical, com Java 21 e Docker disponíveis:
+
+```powershell
+.\gradlew.bat :duplicata-escritural-financiamento-api:test --tests '*FluxoConsultaAutorizadaVerticalTests'
+```
+
+O Wrapper gera o JAR da Signatária; o teste provisiona participantes, tokens aleatórios e portas dinâmicas, recebe Escriturações Manuais e aguarda seu processamento antes de solicitar/aprovar autorizações e consultar páginas. Não requer Compose, configuração manual de credenciais ou dados preexistentes. A suíte também integra o `clean build`. Veja [sequência, cenários e limites da validação vertical](docs/autorizacao-consulta.md#entrega-34--validação-vertical).
 
 ## Evolução do projeto
 O desenvolvimento segue entregas incrementais, priorizando funcionalidades verificáveis, testes automatizados e decisões arquiteturais justificadas.

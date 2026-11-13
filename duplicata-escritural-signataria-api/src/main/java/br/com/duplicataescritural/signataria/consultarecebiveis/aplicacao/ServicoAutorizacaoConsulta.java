@@ -7,6 +7,8 @@ import java.util.UUID;
 
 import br.com.duplicataescritural.signataria.consultarecebiveis.dominio.AutorizacaoConsulta;
 import br.com.duplicataescritural.signataria.consultarecebiveis.infraestrutura.persistencia.AutorizacaoConsultaRepository;
+import br.com.duplicataescritural.signataria.escrituracao.aplicacao.DuplicataConsultada;
+import br.com.duplicataescritural.signataria.escrituracao.aplicacao.ServicoConsultaDuplicatas;
 import br.com.duplicataescritural.signataria.escrituracao.dominio.ChaveIdempotencia;
 import br.com.duplicataescritural.signataria.escrituracao.dominio.Cnpj;
 import br.com.duplicataescritural.signataria.escrituracao.dominio.Sacador;
@@ -15,6 +17,8 @@ import br.com.duplicataescritural.signataria.seguranca.FinanciadorAutenticado;
 import br.com.duplicataescritural.signataria.seguranca.ParticipanteAutenticado;
 import br.com.duplicataescritural.signataria.seguranca.SacadorAutenticado;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Slice;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,12 +27,34 @@ public class ServicoAutorizacaoConsulta {
     private final AutorizacaoConsultaRepository autorizacoes;
     private final SacadorRepository sacadores;
     private final Clock relogio;
+    private final ServicoConsultaDuplicatas consultaDuplicatas;
 
-    public ServicoAutorizacaoConsulta(AutorizacaoConsultaRepository autorizacoes, SacadorRepository sacadores, Clock relogio) {
+    public ServicoAutorizacaoConsulta(AutorizacaoConsultaRepository autorizacoes, SacadorRepository sacadores, Clock relogio,
+            ServicoConsultaDuplicatas consultaDuplicatas) {
         this.autorizacoes = autorizacoes;
         this.sacadores = sacadores;
         this.relogio = relogio;
+        this.consultaDuplicatas = consultaDuplicatas;
     }
+
+    @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
+    public DuplicatasAutorizadas consultarDuplicatas(ParticipanteAutenticado participante, UUID id, int pagina, int tamanho) {
+        if (!(participante instanceof FinanciadorAutenticado financiador)) {
+            throw new AccessDeniedException("Consulta exige Financiador local");
+        }
+        var autorizacao = autorizacoes.findByIdAndFinanciadorId(id, financiador.id())
+                .orElseThrow(RecursoConsultaNaoEncontrado::new);
+        if (!autorizacao.vigente(relogio.instant())) {
+            throw new AccessDeniedException("Autorização sem vigência");
+        }
+        if (pagina < 0 || tamanho < 1 || tamanho > 100 || (long) pagina * tamanho > Integer.MAX_VALUE) {
+            throw new ParametrosConsultaInvalidos();
+        }
+        return new DuplicatasAutorizadas(autorizacao.cnpjSacador().valor(),
+                consultaDuplicatas.consultar(autorizacao.sacadorId(), autorizacao.cnpjSacador(), pagina, tamanho));
+    }
+
+    public record DuplicatasAutorizadas(String cnpjSacador, Slice<DuplicataConsultada> duplicatas) { }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, timeout = 10)
     public AutorizacaoConsulta solicitar(FinanciadorAutenticado financiador, ChaveIdempotencia chave, Cnpj cnpj, Instant fim) {

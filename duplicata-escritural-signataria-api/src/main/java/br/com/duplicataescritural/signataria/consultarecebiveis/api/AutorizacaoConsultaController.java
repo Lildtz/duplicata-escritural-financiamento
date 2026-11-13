@@ -4,11 +4,15 @@ import java.net.URI;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.List;
+import java.util.Set;
 
+import br.com.duplicataescritural.signataria.consultarecebiveis.aplicacao.ParametrosConsultaInvalidos;
 import br.com.duplicataescritural.signataria.consultarecebiveis.aplicacao.ServicoAutorizacaoConsulta;
 import br.com.duplicataescritural.signataria.consultarecebiveis.dominio.AutorizacaoConsulta;
 import br.com.duplicataescritural.signataria.escrituracao.dominio.ChaveIdempotencia;
 import br.com.duplicataescritural.signataria.escrituracao.dominio.Cnpj;
+import br.com.duplicataescritural.signataria.escrituracao.aplicacao.DuplicataConsultada;
 import br.com.duplicataescritural.signataria.seguranca.FinanciadorAutenticado;
 import br.com.duplicataescritural.signataria.seguranca.ParticipanteAutenticado;
 import br.com.duplicataescritural.signataria.seguranca.SacadorAutenticado;
@@ -26,6 +30,8 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -62,6 +68,23 @@ public class AutorizacaoConsultaController {
     public RespostaAutorizacao consultar(@AuthenticationPrincipal ParticipanteAutenticado participante, @PathVariable UUID id) {
         return resposta(servico.consultar(participante, id));
     }
+
+    @GetMapping("/{id}/duplicatas")
+    public RespostaDuplicatas consultarDuplicatas(@AuthenticationPrincipal ParticipanteAutenticado participante,
+            @PathVariable UUID id, @RequestParam(defaultValue = "0") int pagina,
+            @RequestParam(defaultValue = "50") int tamanho, @RequestParam MultiValueMap<String, String> parametros) {
+        if (!Set.of("pagina", "tamanho").containsAll(parametros.keySet())
+                || parametros.values().stream().anyMatch(valores -> valores.size() != 1 || valores.getFirst().isBlank())) {
+            throw new ParametrosConsultaInvalidos();
+        }
+        var resultado = servico.consultarDuplicatas(participante, id, pagina, tamanho);
+        var duplicatas = resultado.duplicatas();
+        return new RespostaDuplicatas(resultado.cnpjSacador(), "LOCAL_SIMULADO", duplicatas.getContent(),
+                duplicatas.getNumber(), duplicatas.getSize(), duplicatas.hasNext());
+    }
+
+    public record RespostaDuplicatas(String cnpjSacador, String escopo, List<DuplicataConsultada> itens,
+            int pagina, int tamanho, boolean temProximaPagina) { }
 
     @PutMapping("/{id}/decisao")
     public RespostaAutorizacao decidir(@AuthenticationPrincipal SacadorAutenticado sacador, @PathVariable UUID id,

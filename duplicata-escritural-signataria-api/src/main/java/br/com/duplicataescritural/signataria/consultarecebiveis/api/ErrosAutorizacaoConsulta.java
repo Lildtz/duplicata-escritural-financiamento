@@ -4,6 +4,8 @@ import java.sql.SQLRecoverableException;
 import java.sql.SQLTransientException;
 
 import br.com.duplicataescritural.signataria.consultarecebiveis.aplicacao.RecursoConsultaNaoEncontrado;
+import br.com.duplicataescritural.signataria.consultarecebiveis.aplicacao.ParametrosConsultaInvalidos;
+import org.springframework.security.access.AccessDeniedException;
 import br.com.duplicataescritural.signataria.consultarecebiveis.dominio.ConflitoAutorizacao;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.RecoverableDataAccessException;
@@ -21,6 +23,16 @@ import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice(assignableTypes = AutorizacaoConsultaController.class)
 public class ErrosAutorizacaoConsulta {
+    @ExceptionHandler(AccessDeniedException.class)
+    ProblemDetail acessoNegado() {
+        return erro(HttpStatus.FORBIDDEN, "CONSULTA_NAO_PERMITIDA", "Consulta não permitida");
+    }
+
+    @ExceptionHandler(ParametrosConsultaInvalidos.class)
+    ProblemDetail parametrosInvalidos() {
+        return erro(HttpStatus.BAD_REQUEST, "PARAMETROS_CONSULTA_INVALIDOS", "Parâmetros de consulta inválidos");
+    }
+
     @ExceptionHandler(ConflitoAutorizacao.class)
     ProblemDetail conflito(ConflitoAutorizacao exception) {
         return erro(HttpStatus.CONFLICT, exception.codigo(), "Operação incompatível com a autorização de consulta");

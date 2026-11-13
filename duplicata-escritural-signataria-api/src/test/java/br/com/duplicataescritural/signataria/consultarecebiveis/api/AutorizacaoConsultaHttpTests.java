@@ -1,6 +1,7 @@
 package br.com.duplicataescritural.signataria.consultarecebiveis.api;
 
 import java.net.URI;
+import java.math.BigDecimal;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -25,6 +26,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import br.com.duplicataescritural.signataria.escrituracao.dominio.ExemploEscrituracao;
+import br.com.duplicataescritural.signataria.consultarecebiveis.aplicacao.ServicoAutorizacaoConsulta;
+import br.com.duplicataescritural.signataria.consultarecebiveis.aplicacao.RecursoConsultaNaoEncontrado;
+import br.com.duplicataescritural.signataria.consultarecebiveis.aplicacao.ParametrosConsultaInvalidos;
+import br.com.duplicataescritural.signataria.escrituracao.dominio.Sacador;
+import br.com.duplicataescritural.signataria.escrituracao.dominio.Cnpj;
+import br.com.duplicataescritural.signataria.seguranca.FinanciadorAutenticado;
+import br.com.duplicataescritural.signataria.seguranca.SacadorAutenticado;
+import org.springframework.security.access.AccessDeniedException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -70,6 +79,7 @@ class AutorizacaoConsultaHttpTests {
     @Autowired JsonMapper json;
     @Autowired Environment ambiente;
     @Autowired RelogioControlavel relogio;
+    @Autowired ServicoAutorizacaoConsulta servico;
 
     @DynamicPropertySource
     static void credenciais(DynamicPropertyRegistry propriedades) {
@@ -117,6 +127,163 @@ class AutorizacaoConsultaHttpTests {
         assertThat(enviar(2, "GET", BASE + "/" + UUID.randomUUID(), null, null).statusCode()).isEqualTo(404);
         assertThat(enviar(-1, "GET", "/actuator/health", null, null).statusCode()).isEqualTo(200);
         assertThat(enviar(2, "GET", caminho + "/duplicatas", null, null).statusCode()).isEqualTo(403);
+    }
+
+    @Test
+    void consultaSomenteDuplicatasPersistidasDoSacadorECnpjAutorizados() throws Exception {
+        UUID esperada = escriturar(SACADOR_A, "11222333000181", "DUP-A", AGORA, "999999999999.99");
+        escriturar(SACADOR_B, "12ABC34501DE35", "DUP-B", AGORA, "20.00");
+        escriturar(SACADOR_B, "11222333000181", "OUTRO-ID", AGORA, "30.00");
+        escriturar(SACADOR_A, "11222333000262", "OUTRA-FILIAL", AGORA, "40.00");
+        var pendente = enviar(0, "POST", "/api/v1/escrituracoes/manuais", json.valueToTree(ExemploEscrituracao.dados()), "pendente");
+        assertThat(pendente.statusCode()).isEqualTo(202);
+        String caminho = ativar("consulta");
+
+        // Mudanças cadastrais não reescrevem a fotografia da autorização nem da emissão.
+        jdbc.sql("UPDATE escrituradora.sacador SET cnpj = '19131243000197' WHERE id = :id").param("id", SACADOR_A).update();
+        var resposta = enviar(2, "GET", caminho + "/duplicatas", null, null);
+        assertThat(resposta.statusCode()).isEqualTo(200);
+        var pagina = json.readTree(resposta.body());
+        assertThat(pagina.size()).isEqualTo(6);
+        assertThat(pagina.get("cnpjSacador").asString()).isEqualTo("11222333000181");
+        assertThat(pagina.get("escopo").asString()).isEqualTo("LOCAL_SIMULADO");
+        assertThat(pagina.get("pagina").asInt()).isZero();
+        assertThat(pagina.get("tamanho").asInt()).isEqualTo(50);
+        assertThat(pagina.get("temProximaPagina").asBoolean()).isFalse();
+        assertThat(pagina.get("itens").size()).isEqualTo(1);
+        var item = pagina.get("itens").get(0);
+        assertThat(item.size()).isEqualTo(6);
+        assertThat(item.get("idDuplicata").asString()).isEqualTo(esperada.toString());
+        assertThat(item.get("numeroDuplicata").asString()).isEqualTo("DUP-A");
+        assertThat(item.get("cnpjSacado").asString()).isEqualTo("12ABC34501DE35");
+        assertThat(item.get("dataVencimento").asString()).isEqualTo("2024-02-10");
+        assertThat(new BigDecimal(item.get("valorNominal").asString())).isEqualByComparingTo("999999999999.99");
+        assertThat(item.get("escrituradaEm").asString()).isEqualTo(AGORA.toString());
+        assertThat(enviar(5, "GET", caminho + "/duplicatas", null, null).body()).isEqualTo(resposta.body());
+        assertThat(resposta.body()).doesNotContain("documentoFiscal", "domicilio", "processamento", "valorFatura", "dados");
+    }
+
+    @Test
+    void isolaBeneficiarioEPapelMesmoComUuidsIguais() throws Exception {
+        String caminho = ativar("isolamento");
+        assertThat(enviar(3, "POST", BASE, entrada(), "outra-autorizacao").statusCode()).isEqualTo(201);
+        var alheia = enviar(3, "GET", caminho + "/duplicatas", null, null);
+        var ausente = enviar(3, "GET", BASE + "/" + UUID.randomUUID() + "/duplicatas", null, null);
+        assertThat(alheia.statusCode()).isEqualTo(404);
+        assertThat(ausente.statusCode()).isEqualTo(404);
+        assertThat(json.readTree(alheia.body()).get("codigo")).isEqualTo(json.readTree(ausente.body()).get("codigo"));
+        assertThat(enviar(0, "GET", caminho + "/duplicatas", null, null).statusCode()).isEqualTo(403);
+        assertThat(enviar(1, "GET", caminho + "/duplicatas", null, null).statusCode()).isEqualTo(403);
+        assertThat(enviar(-1, "GET", caminho + "/duplicatas", null, null).statusCode()).isEqualTo(401);
+    }
+
+    @Test
+    void revalidaEstadoEVigenciaEmCadaConsultaInclusiveAposCommitDaRevogacao() throws Exception {
+        String pendente = solicitar("pendente");
+        assertThat(enviar(2, "GET", pendente + "/duplicatas", null, null).statusCode()).isEqualTo(403);
+        assertThat(enviar(0, "PUT", pendente + "/decisao", decisao("RECUSAR"), null).statusCode()).isEqualTo(200);
+        assertThat(enviar(2, "GET", pendente + "/duplicatas", null, null).statusCode()).isEqualTo(403);
+        String ativa = ativar("ativa");
+        assertThat(enviar(2, "GET", ativa + "/duplicatas", null, null).statusCode()).isEqualTo(200);
+        relogio.instante.set(AGORA.minusNanos(1));
+        assertThat(enviar(2, "GET", ativa + "/duplicatas", null, null).statusCode()).isEqualTo(403);
+        relogio.instante.set(AGORA.plusSeconds(60).minusNanos(1));
+        assertThat(enviar(2, "GET", ativa + "/duplicatas", null, null).statusCode()).isEqualTo(200);
+        relogio.instante.set(AGORA.plusSeconds(60));
+        assertThat(enviar(2, "GET", ativa + "/duplicatas", null, null).statusCode()).isEqualTo(403);
+        relogio.instante.set(AGORA);
+        assertThat(enviar(0, "DELETE", ativa, null, null).statusCode()).isEqualTo(204);
+        // O DELETE retornou após commit; todas estas novas consultas precisam observar REVOGADA.
+        var posteriores = concorrer(java.util.stream.IntStream.range(0, 4)
+                .<Callable<HttpResponse<String>>>mapToObj(i -> () -> enviar(2, "GET", ativa + "/duplicatas", null, null)).toList());
+        assertThat(posteriores).allSatisfy(r -> assertThat(r.statusCode()).isEqualTo(403));
+    }
+
+    @Test
+    void autorizacaoValidaSemTitulosRetornaListaVazia() throws Exception {
+        String caminho = ativar("vazia");
+        var resposta = enviar(2, "GET", caminho + "/duplicatas", null, null);
+        assertThat(resposta.statusCode()).isEqualTo(200);
+        assertThat(json.readTree(resposta.body()).get("itens").size()).isZero();
+        assertThat(json.readTree(resposta.body()).get("temProximaPagina").asBoolean()).isFalse();
+    }
+
+    @Test
+    void paginaNoBancoComOrdemTemporalEDesempatePorId() throws Exception {
+        UUID ultima = escriturar(SACADOR_A, "11222333000181", "ULTIMA", AGORA.plusSeconds(1), "0.01");
+        UUID empateA = escriturar(SACADOR_A, "11222333000181", "Z", AGORA, "123456789.12");
+        UUID empateB = escriturar(SACADOR_A, "11222333000181", "A", AGORA, "10.10");
+        // A ordem nativa de UUID do PostgreSQL compara os bytes sem sinal.
+        var esperados = new ArrayList<>(List.of(empateA.toString(), empateB.toString()));
+        esperados.sort(String::compareTo);
+        esperados.add(ultima.toString());
+        String caminho = ativar("paginas") + "/duplicatas";
+        for (int pagina = 0; pagina < 3; pagina++) {
+            String url = caminho + "?pagina=" + pagina + "&tamanho=1";
+            var resposta = enviar(2, "GET", url, null, null);
+            assertThat(resposta.statusCode()).isEqualTo(200);
+            assertThat(enviar(2, "GET", url, null, null).body()).isEqualTo(resposta.body());
+            var conteudo = json.readTree(resposta.body());
+            assertThat(conteudo.get("itens").size()).isEqualTo(1);
+            assertThat(conteudo.get("itens").get(0).get("idDuplicata").asString()).isEqualTo(esperados.get(pagina));
+            assertThat(conteudo.get("pagina").asInt()).isEqualTo(pagina);
+            assertThat(conteudo.get("tamanho").asInt()).isEqualTo(1);
+            assertThat(conteudo.get("temProximaPagina").asBoolean()).isEqualTo(pagina < 2);
+        }
+        var alem = enviar(2, "GET", caminho + "?pagina=3&tamanho=1", null, null);
+        assertThat(json.readTree(alem.body()).get("itens").size()).isZero();
+        assertThat(json.readTree(alem.body()).get("temProximaPagina").asBoolean()).isFalse();
+        assertThat(enviar(2, "GET", caminho + "?tamanho=100", null, null).statusCode()).isEqualTo(200);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"pagina=-1", "tamanho=0", "tamanho=-1", "tamanho=101", "pagina=x", "tamanho=1.5",
+            "pagina=2147483648", "pagina=2147483647&tamanho=100", "pagina=", "tamanho=", "pagina=0&pagina=1",
+            "sort=id,desc", "cnpjSacador=12ABC34501DE35", "sacadorId=outro", "financiadorId=outro", "escopo=GLOBAL"})
+    void rejeitaParametrosInvalidosETentativasDeAmpliarEscopo(String parametros) throws Exception {
+        String caminho = ativar("parametros") + "/duplicatas?" + parametros;
+        assertThat(enviar(2, "GET", caminho, null, null).statusCode()).isEqualTo(400);
+    }
+
+    @Test
+    void servicoValidaIdentidadeBeneficiarioVigenciaEPaginacaoSemController() throws Exception {
+        String caminho = solicitar("servico");
+        UUID id = UUID.fromString(caminho.substring(caminho.lastIndexOf('/') + 1));
+        var financiador = new FinanciadorAutenticado(FINANCIADOR_A);
+        var sacador = new Sacador(SACADOR_A, new Cnpj("11222333000181"), "Teste", ExemploEscrituracao.endereco(),
+                java.time.LocalDate.of(2020, 1, 1), true);
+        assertThatThrownBy(() -> servico.consultarDuplicatas(null, id, 0, 50)).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> servico.consultarDuplicatas(new SacadorAutenticado(sacador.fotografia()), id, 0, 50))
+                .isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> servico.consultarDuplicatas(new FinanciadorAutenticado(FINANCIADOR_B), id, 0, 50))
+                .isInstanceOf(RecursoConsultaNaoEncontrado.class);
+        assertThatThrownBy(() -> servico.consultarDuplicatas(financiador, id, 0, 50)).isInstanceOf(AccessDeniedException.class);
+        assertThat(enviar(0, "PUT", caminho + "/decisao", decisao("APROVAR"), null).statusCode()).isEqualTo(200);
+        assertThatThrownBy(() -> servico.consultarDuplicatas(financiador, id, -1, 50)).isInstanceOf(ParametrosConsultaInvalidos.class);
+        assertThatThrownBy(() -> servico.consultarDuplicatas(financiador, id, 0, 101)).isInstanceOf(ParametrosConsultaInvalidos.class);
+        assertThat(servico.consultarDuplicatas(financiador, id, 0, 50).duplicatas().getContent()).isEmpty();
+        assertThat(enviar(2, "DELETE", caminho, null, null).statusCode()).isEqualTo(204);
+        assertThatThrownBy(() -> servico.consultarDuplicatas(financiador, id, 0, 50)).isInstanceOf(AccessDeniedException.class);
+    }
+
+    private String ativar(String chave) throws Exception {
+        String caminho = solicitar(chave);
+        assertThat(enviar(0, "PUT", caminho + "/decisao", decisao("APROVAR"), null).statusCode()).isEqualTo(200);
+        return caminho;
+    }
+
+    private UUID escriturar(UUID sacador, String cnpj, String numero, Instant instante, String valor) {
+        UUID id = UUID.randomUUID();
+        ObjectNode dados = json.valueToTree(ExemploEscrituracao.dados());
+        dados.put("numeroDuplicata", numero).put("numeroFatura", numero)
+                .put("valorFatura", new BigDecimal(valor)).put("valorDuplicata", new BigDecimal(valor));
+        jdbc.sql("""
+                INSERT INTO escrituradora.duplicata
+                    (id, sacador_id, sacador_cnpj, numero_duplicata, numero_fatura, numero_parcela, dados, escriturada_em)
+                VALUES (:id, :sacador, :cnpj, :numero, :numero, 1, CAST(:dados AS jsonb), :instante)
+                """).param("id", id).param("sacador", sacador).param("cnpj", cnpj).param("numero", numero)
+                .param("dados", json.writeValueAsString(dados)).param("instante", java.sql.Timestamp.from(instante)).update();
+        return id;
     }
 
     @Test

@@ -42,6 +42,7 @@ public class SegurancaEscrituracao {
                     if (local) {
                         requests.requestMatchers("/api/v1/escrituracoes/**").hasAuthority("SACADOR_LOCAL");
                         requests.requestMatchers(HttpMethod.POST, "/api/v1/autorizacoes-consulta").hasAuthority("FINANCIADOR_LOCAL")
+                                .requestMatchers(HttpMethod.GET, "/api/v1/autorizacoes-consulta/*/duplicatas").hasAuthority("FINANCIADOR_LOCAL")
                                 .requestMatchers(HttpMethod.PUT, "/api/v1/autorizacoes-consulta/*/decisao").hasAuthority("SACADOR_LOCAL")
                                 .requestMatchers(HttpMethod.GET, "/api/v1/autorizacoes-consulta/*").hasAnyAuthority("SACADOR_LOCAL", "FINANCIADOR_LOCAL")
                                 .requestMatchers(HttpMethod.DELETE, "/api/v1/autorizacoes-consulta/*").hasAnyAuthority("SACADOR_LOCAL", "FINANCIADOR_LOCAL");

@@ -1,8 +1,9 @@
-# Entrega 3.1 — identidades e autorização local de consulta
+# Entrega 3 — autorização e consulta local de Duplicatas (3.1 e 3.2)
 
 Esta capacidade é uma **simplificação do simulador**, não um Opt-in regulatório
-completo nem um contrato oficial B3. Não implementa Registro, Agenda, consulta de
-Duplicatas pelo Financiador ou integração HTTP do Banco DUP. Não comprova anuência
+completo nem um contrato oficial B3. A Entrega 3.2 permite consulta autorizada de
+Duplicatas locais pelo Financiador. Não implementa Registro, Agenda regulatória
+completa ou integração HTTP do Banco DUP. Não comprova anuência
 jurídica de representantes humanos. Os ADRs 0001–0003 permanecem preservados.
 
 O package funcional é `consultarecebiveis`, com `api`, `aplicacao`, `dominio` e
@@ -55,6 +56,7 @@ Todas as chamadas exigem `Authorization: Bearer <token-local>`.
 |---|---|---|
 | POST `/api/v1/autorizacoes-consulta` | Financiador | 201 e Location |
 | GET `/api/v1/autorizacoes-consulta/{id}` | Sacador correspondente ou Financiador beneficiário | 200 |
+| GET `/api/v1/autorizacoes-consulta/{id}/duplicatas` | Financiador beneficiário com autorização ATIVA e vigente | 200 |
 | PUT `/api/v1/autorizacoes-consulta/{id}/decisao` | Sacador correspondente | 200 |
 | DELETE `/api/v1/autorizacoes-consulta/{id}` | Sacador correspondente ou Financiador beneficiário | 204 |
 
@@ -164,5 +166,91 @@ git diff --check
 git status --short
 ```
 
-A implementação permanece sujeita ao Code Review da Entrega 3.1. A próxima etapa
-não está habilitada: nenhum endpoint consulta Duplicatas como Financiador.
+## Entrega 3.2 — consulta autorizada de Duplicatas locais
+
+```http
+GET /api/v1/autorizacoes-consulta/{id}/duplicatas?pagina=0&tamanho=50
+Authorization: Bearer <token-local-do-financiador>
+```
+
+Exemplo de resposta 200 (UUID técnico ilustrativo):
+
+```json
+{
+  "cnpjSacador": "11222333000181",
+  "escopo": "LOCAL_SIMULADO",
+  "itens": [
+    {
+      "idDuplicata": "1b7d4cef-171e-4a91-b52e-eeb8ced7b2f9",
+      "numeroDuplicata": "DUP-1",
+      "cnpjSacado": "12ABC34501DE35",
+      "dataVencimento": "2026-12-01",
+      "valorNominal": 100.00,
+      "escrituradaEm": "2026-11-12T15:00:01Z"
+    }
+  ],
+  "pagina": 0,
+  "tamanho": 50,
+  "temProximaPagina": false
+}
+```
+
+`valorNominal` corresponde a `DadosEscrituracao.valorDuplicata` (`BigDecimal`),
+preservando a precisão decimal e os dados imutáveis da emissão. Não representa
+saldo disponível, antecipável ou livre de ônus. `idDuplicata` é UUID técnico,
+sem equivalência com IUD. Não são expostos JSONB, documento fiscal, endereço,
+dados de processamento ou informações cadastrais adicionais.
+
+O serviço de aplicação valida a identidade tipada de Financiador local, busca
+a autorização por ID **e beneficiário** e reavalia `vigente` com o Clock injetado.
+Sacador não pode assumir o papel de Financiador, mesmo tendo o mesmo UUID.
+O intervalo é `inicioVigencia <= agora < fimVigencia`, somente no estado ATIVA.
+
+| Situação específica da consulta | HTTP |
+|---|---|
+| Autorização própria ATIVA e vigente, inclusive sem títulos | 200 |
+| Autorização própria PENDENTE, RECUSADA, REVOGADA ou fora da vigência | 403 |
+| Autorização inexistente ou de outro Financiador | 404 genérico |
+| Token de Sacador | 403 |
+| Parâmetros inválidos, repetidos, vazios ou desconhecidos | 400 |
+
+Não existe parâmetro para escolher Sacador, CNPJ, beneficiário ou escopo.
+`pagina` e `tamanho` são os únicos parâmetros aceitos. Valores omitidos usam 0 e 50;
+`pagina` deve ser inteiro não negativo, `tamanho` deve estar entre 1 e 100.
+Offsets superiores a `Integer.MAX_VALUE`, limite da paginação JPA, retornam 400.
+Ordenação fixa: `escrituradaEm ASC, id ASC`, sem `sort` fornecido pelo cliente.
+A consulta usa paginação no banco com `Slice`, lendo no máximo `tamanho + 1`
+Duplicatas para detectar próxima página; não calcula contagem total.
+Uma página sem títulos retorna `itens: []` e `temProximaPagina: false`.
+
+`consultarecebiveis` chama `escrituracao.aplicacao.ServicoConsultaDuplicatas`,
+recebendo somente a projeção `DuplicataConsultada`. A entidade `Duplicata` e seu
+repository permanecem na Escrituração. A busca JPA exige simultaneamente UUID
+do Sacador e CNPJ completo capturados na autorização; não amplia para matriz,
+filiais ou dados de outros Sacadores. Alterações cadastrais posteriores não
+reescrevem a fotografia autorizada nem as emissões históricas. Pedidos ainda
+PENDENTE não são Duplicatas e não aparecem na consulta.
+
+A operação usa transação somente de leitura em READ COMMITTED, timeout de 10s,
+sem cache de autorização. Cada requisição relê a autorização no banco; consultas
+iniciadas após o commit da revogação são bloqueadas. Uma consulta que já tenha
+validado a autorização antes desse commit pode terminar. Não há promessa de
+snapshot consistente entre páginas: inserções concorrentes podem deslocar offsets.
+O JPA carrega os dados imutáveis das entidades da página e a aplicação os projeta;
+não há extração SQL específica de campos JSONB. O volume lido é limitado pela página.
+V1–V3 permanecem intactas; não há V4 ou novo índice. O índice existente iniciado
+por `sacador_id` atende ao filtro; custo de ordenação e offsets altos deve ser
+medido antes de propor índices adicionais ou paginação por cursor.
+
+Os testes HTTP com PostgreSQL/Testcontainers cobrem papéis, beneficiário,
+todos os estados, início/fim exatos de vigência, consultas após commit da revogação,
+lista vazia, isolamento por UUID e CNPJ completo (incluindo filial), fotografia,
+pedidos PENDENTE, precisão decimal, paginação e desempate por ID. Também exercitam
+o serviço diretamente, sem depender das proteções do controller/Spring Security.
+O build completo executa as regressões das Entregas 1, 2 e 3.1.
+
+Esta é somente uma **consulta local simulada**, sem equivalência com uma Agenda
+regulatória completa. Não inclui Registro, IUD, interoperabilidade, crédito,
+integração do Financiamento, MCP, Agents, Spring AI ou Kafka.
+A implementação permanece sujeita ao Code Review da Entrega 3.2; a Entrega 3.3
+não deve começar antes dessa revisão.

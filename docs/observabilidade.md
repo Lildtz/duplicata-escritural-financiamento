@@ -194,6 +194,7 @@ alterações entre elas. Todos os dez testes verticais passaram em 1min03s. O ú
 Banco DUP e 176 da Signatária), sem falhas, erros ou ignorados.
 
 **Aprovação técnica final da 4.2 em 13/11/2026, com Code Review concluído favoravelmente.**
-Versionamento pendente de autorização explícita. Nenhum backend externo de
+Versionamento autorizado e registrado em `54357e8`. Nenhum backend externo de
 monitoramento foi validado; utilizou-se somente o receptor OTLP efêmero de teste.
-As entregas 4.3, 4.4 e 4.5 permanecem planejadas e não iniciadas.
+No aceite da 4.2, as entregas 4.3, 4.4 e 4.5 ainda estavam planejadas; o estado
+atual está no [roadmap](roadmap.md).

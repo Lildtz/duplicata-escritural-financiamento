@@ -55,7 +55,7 @@ A presença de uma tecnologia nesta lista não significa que ela já esteja impl
 
 ## Estado do projeto
 
-**Fase de referência: Entrega 4.2 — observabilidade fundamental aprovada tecnicamente em 13/11/2026, com Code Review concluído favoravelmente; versionamento pendente de autorização explícita.** A 4.1 foi aprovada tecnicamente em 13/11/2026 e versionada isoladamente em `03290c8`. A validação da UI foi HTTP, sem inspeção visual efetiva. A 3.4 foi versionada em `27e950e`; a 3.3 permanece em `04081ca`.
+**Fase de referência: Entrega 4.3 — CI e GitHub Flow implementados e validados localmente, com Code Review, aceite e execução no GitHub pendentes.** A 4.2 foi aprovada tecnicamente em 13/11/2026 e versionada em `54357e8`. A 4.1 permanece em `03290c8`, com validação HTTP da UI e sem inspeção visual efetiva; a 3.4 foi versionada em `27e950e` e a 3.3 em `04081ca`.
 
 As Entregas 1, 2, 3.1 e 3.2 estão implementadas. A 3.2 recebeu aprovação técnica retrospectiva em 13/11/2026, sem evidência de aceite histórico anterior, conforme o [roadmap](docs/roadmap.md). A 3.4 exercita o fluxo completo do simulador, preservando as fronteiras entre as aplicações.
 
@@ -142,7 +142,22 @@ Validação final: 277 testes aprovados, incluindo dez verticais, sem falhas, er
 ou ignorados. Três execuções independentes adicionais do teste OTLP passaram. Foram
 aprovados os ajustes de robustez do diagnóstico JDBC e da espera de spans no
 Awaitility. Nenhum backend externo de monitoramento foi validado. As entregas
-4.3, 4.4 e 4.5 permanecem planejadas e não iniciadas.
+4.4 e 4.5 permanecem planejadas e não iniciadas.
+
+## Integração contínua e contribuições
+
+O workflow [CI](.github/workflows/ci.yml) foi preparado para PRs direcionados à
+`main`, pushes em `main` e execução manual. O job **Build e testes** usa Ubuntu
+24.04, Temurin 21 e o Gradle Wrapper, executando a suíte completa com Docker e
+Testcontainers, sem excluir os testes verticais ou exigir coletor externo.
+Relatórios XML/HTML são preservados como artefatos mesmo após falha do build,
+quando disponíveis, e os totais JUnit são apresentados no resumo da execução.
+
+O [guia de contribuição](CONTRIBUTING.md) define feature branches por entrega,
+PR para `main`, CI, Code Review e aceite técnico antes do merge. O status check
+será obrigatório quando a proteção da branch for configurada. Publicação,
+primeiro PR e validação real em Linux/GitHub ainda dependem de autorização;
+nenhuma execução remota ou badge de sucesso é declarada nesta preparação.
 
 ## Evolução do projeto
 O desenvolvimento segue entregas incrementais, priorizando funcionalidades verificáveis, testes automatizados e decisões arquiteturais justificadas.

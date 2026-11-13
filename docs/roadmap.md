@@ -8,7 +8,7 @@ O progresso é registrado com base nas implementações conhecidas. Uma funciona
 
 ## Estado atual
 
-**Entrega em andamento: 3.3 — Integração HTTP entre o Banco DUP e a Signatária.**
+**Última entrega: 3.3 — aprovação técnica final registrada em 13/11/2026; commit de encerramento autorizado.**
 
 | Entrega | Descrição                                 | Situação                          |
 | ------- | ----------------------------------------- | --------------------------------- |
@@ -16,8 +16,8 @@ O progresso é registrado com base nas implementações conhecidas. Uma funciona
 | 1       | Recebimento de Escrituração Manual        | Implementada                      |
 | 2       | Processamento assíncrono de Escrituração  | Implementada                      |
 | 3.1     | Identidades e autorização de consulta     | Implementada                      |
-| 3.2     | Consulta local protegida de recebíveis    | Implementada; revisão a confirmar |
-| 3.3     | Integração HTTP do Banco DUP              | Em andamento                      |
+| 3.2     | Consulta local protegida de recebíveis    | Aprovação técnica retrospectiva em 13/11/2026 |
+| 3.3     | Integração HTTP do Banco DUP              | Aprovação técnica final em 13/11/2026 |
 | 3.4     | Validação vertical do fluxo               | Planejada                         |
 
 ---
@@ -91,7 +91,7 @@ Esta entrega estabelece a primeira integração funcional entre duas aplicaçõe
 
 ### 3.2 — Consulta local protegida
 
-**Situação: implementada; encerramento da revisão técnica a confirmar.**
+**Situação: implementada; aprovação técnica retrospectiva registrada em 13/11/2026, sem defeitos funcionais bloqueantes.**
 
 - [x] Disponibilizar consulta paginada de Duplicatas locais.
 - [x] Restringir a consulta ao Financiador autorizado.
@@ -100,13 +100,29 @@ Esta entrega estabelece a primeira integração funcional entre duas aplicaçõe
 - [x] Retornar projeção mínima dos títulos.
 - [x] Manter a propriedade da entidade Duplicata na Escrituração.
 - [x] Revalidar a autorização em cada consulta.
-- [x] Confirmar aprovação final do Code Review e dos testes.
+- [x] Confirmar build e testes relevantes.
+- [x] Realizar revisão retrospectiva da implementação associada a `eba5d38`.
+- [x] Registrar aceite técnico retrospectivo da 3.2 em 13/11/2026.
 
 A consulta não representa uma Agenda regulatória completa nem comprova disponibilidade para financiamento.
 
+Na preparação da 3.3, o build completo confirmou novamente os 163 testes anteriores,
+incluindo PostgreSQL/Testcontainers. A revisão corretiva verificou o histórico Git
+disponível: `eba5d38` registra a implementação da 3.2; `556528a` introduziu o roadmap
+com aprovação marcada e, simultaneamente, revisão a confirmar. Não foi encontrado
+registro inequívoco de aprovação em commits, tags, notas Git ou documentos locais.
+O checklist foi corrigido para separar testes aprovados de aprovação formal pendente.
+A revisão retrospectiva foi realizada nesta sessão em 13/11/2026 e examinou segurança,
+autorização por Financiador, paginação, isolamento, falhas, transações, contratos,
+testes e ADRs. Não encontrou defeitos funcionais bloqueantes na 3.2 e emitiu parecer
+favorável à aprovação atual. Isso não comprova aprovação histórica anterior.
+O aceite técnico retrospectivo foi autorizado e registrado em 13/11/2026,
+sem retroagir sua data. Nenhuma aprovação histórica foi presumida, o commit
+`eba5d38` foi preservado e nenhum comportamento funcional da 3.2 foi alterado.
+
 ### 3.3 — Integração HTTP Banco DUP–Signatária
 
-**Situação: em implementação pelo Codex.**
+**Situação: implementada e validada; aprovação técnica final registrada em 13/11/2026, após Code Review e revisão corretiva favoráveis.**
 
 **Aplicações envolvidas:**
 
@@ -115,23 +131,57 @@ A consulta não representa uma Agenda regulatória completa nem comprova disponi
 
 Escopo:
 
-- [ ] Implementar a integração HTTP síncrona.
-- [ ] Introduzir o `GatewayRegistradora` como porta de integração.
-- [ ] Implementar o adapter HTTP usando Spring `RestClient`.
-- [ ] Configurar autenticação técnica entre as aplicações.
-- [ ] Permitir solicitação de autorização a partir do Banco DUP.
-- [ ] Consultar o estado da autorização.
-- [ ] Consultar os recebíveis locais autorizados.
-- [ ] Configurar timeouts.
-- [ ] Tratar falhas de integração e traduzir erros.
-- [ ] Preservar a separação entre os modelos das aplicações.
-- [ ] Implementar testes automatizados da integração.
+- [x] Implementar a integração HTTP síncrona.
+- [x] Introduzir o `GatewayRegistradora` como porta de integração.
+- [x] Implementar o adapter HTTP usando Spring `RestClient`.
+- [x] Configurar autenticação técnica entre as aplicações.
+- [x] Permitir solicitação de autorização a partir do Banco DUP.
+- [x] Consultar o estado da autorização.
+- [x] Consultar os recebíveis locais autorizados.
+- [x] Configurar timeouts.
+- [x] Tratar falhas de integração e traduzir erros.
+- [x] Preservar a separação entre os modelos das aplicações.
+- [x] Implementar testes automatizados da integração.
+- [x] Atualizar README e guia técnico com contratos, configuração e limitações.
+- [x] Avaliar favoravelmente a implementação e a revisão corretiva da 3.3.
+- [x] Registrar aprovação técnica final em 13/11/2026.
+- [x] Autorizar o commit único de encerramento da 3.3, sem push.
+
+**Evidências técnicas:** casos de uso em `financiamento.consultarecebiveis.aplicacao`,
+porta e modelos próprios em `dominio`, adapter/configuração em
+`infraestrutura.integracao.signataria`. São consumidos os três contratos existentes
+(solicitação de autorização, consulta de autorização e página de Duplicatas).
+A credencial Bearer identifica exclusivamente o Financiador provisionado na Signatária;
+não é repassada identidade de participante por parâmetro ou header arbitrário.
+
+Testes do Financiamento usam Mockito, MockRestServiceServer e HTTP descartável do JDK,
+sem novas dependências. Cobrem sucesso, paginação, vazio, negação após revogação/expiração,
+404 genérico, token rejeitado, falhas HTTP/transporte, resposta incompatível, bootstrap,
+configuração, timeout real e recusa de redirecionamento. As regressões da Signatária
+permanecem em PostgreSQL/Testcontainers. Comando de validação: `.\gradlew.bat clean build`.
+Resultados consolidados e procedimentos estão no [guia técnico](autorizacao-consulta.md#entrega-33--integração-http-do-banco-dup).
+
+A revisão corretiva preservou o código funcional: o POST remoto retorna 201 tanto
+na criação quanto na repetição idempotente válida; conflito mantém 409. Testes do
+adapter e da Signatária reforçam esses casos e a ausência de retry da aplicação.
+HTTP 429 não é previsto pelo contrato atual e permanece `RESPOSTA_INCOMPATIVEL`.
+A identidade continua definida pelo Bearer provisionado, com a conferência operacional
+do vínculo token/Financiador explicitada no guia. A avaliação favorável da implementação
+e o aceite técnico da revisão corretiva da 3.3 foram informados nesta sessão.
+A aprovação técnica final da 3.3 foi autorizada e registrada em 13/11/2026.
+O commit de encerramento foi autorizado separadamente; seu registro e identificador
+são verificáveis no histórico Git. A aprovação técnica não substitui esse registro.
+A aprovação retrospectiva da 3.2 está registrada separadamente, sem inventar aceite anterior.
 
 **Restrições:**
 
 O Banco DUP não acessa diretamente o banco de dados da Signatária e não assume a propriedade dos títulos.
 
 Esta entrega não contempla concessão de crédito, Kafka, MCP, Spring AI, retry automático ou circuit breaker.
+Não foram criados endpoints de entrada no Banco DUP: os casos de uso são beans Spring
+disponíveis no perfil `local`. A referência `consultadaEm` é local, pois o contrato
+da 3.2 não publica instante de consulta. Não há snapshot entre páginas.
+O fluxo real entre as duas aplicações não foi executado nesta entrega; permanece na 3.4.
 
 **Critério de conclusão:** o Banco DUP utiliza as capacidades autorizadas da Signatária por HTTP, com autenticação, contratos e tratamento de falhas verificados.
 

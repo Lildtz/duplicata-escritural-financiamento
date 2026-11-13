@@ -1,0 +1,6 @@
+financiamento:
+  signataria:
+    url-base: ${SIGNATARIA_URL_BASE:http://localhost:8081}
+    token: ${SIGNATARIA_TOKEN:}
+    timeout-conexao: ${SIGNATARIA_TIMEOUT_CONEXAO:2s}
+    timeout-leitura: ${SIGNATARIA_TIMEOUT_LEITURA:5s}

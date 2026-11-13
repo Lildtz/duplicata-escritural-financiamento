@@ -302,7 +302,10 @@ class AutorizacaoConsultaHttpTests {
         relogio.instante.set(AGORA.plusSeconds(2));
         assertThat(enviar(0, "PUT", caminho + "/decisao", decisao("APROVAR"), null).body()).isEqualTo(aprovada.body());
         assertThat(enviar(0, "PUT", caminho + "/decisao", decisao("RECUSAR"), null).statusCode()).isEqualTo(409);
-        assertThat(enviar(5, "POST", BASE, entrada().put("cnpjSacador", " 11.222.333/0001-81 "), "ciclo").body()).isEqualTo(original.body());
+        var repetidaAprovada = enviar(5, "POST", BASE, entrada().put("cnpjSacador", " 11.222.333/0001-81 "), "ciclo");
+        assertThat(repetidaAprovada.statusCode()).isEqualTo(201);
+        assertThat(repetidaAprovada.headers().firstValue("Location")).isEqualTo(original.headers().firstValue("Location"));
+        assertThat(repetidaAprovada.body()).isEqualTo(original.body());
         assertThat(enviar(0, "DELETE", caminho, null, null).statusCode()).isEqualTo(204);
         var revogada = enviar(2, "GET", caminho, null, null);
         assertThat(json.readTree(revogada.body()).get("status").asString()).isEqualTo("REVOGADA");
@@ -311,7 +314,10 @@ class AutorizacaoConsultaHttpTests {
         assertThat(enviar(2, "DELETE", caminho, null, null).statusCode()).isEqualTo(204);
         assertThat(enviar(2, "GET", caminho, null, null).body()).isEqualTo(revogada.body());
         assertThat(enviar(0, "PUT", caminho + "/decisao", decisao("APROVAR"), null).statusCode()).isEqualTo(409);
-        assertThat(enviar(2, "POST", BASE, entrada(), "ciclo").body()).isEqualTo(original.body());
+        var repetidaRevogada = enviar(2, "POST", BASE, entrada(), "ciclo");
+        assertThat(repetidaRevogada.statusCode()).isEqualTo(201);
+        assertThat(repetidaRevogada.headers().firstValue("Location")).isEqualTo(original.headers().firstValue("Location"));
+        assertThat(repetidaRevogada.body()).isEqualTo(original.body());
         assertThat(contar()).isEqualTo(1);
     }
 

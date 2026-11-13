@@ -124,9 +124,9 @@ Após alterações dos nomes do projeto raiz ou dos subprojetos, reimporte o pro
 
 ## Componentes implementados
 
-Existem apenas dois subprojetos Spring Boot, sem integrações entre aplicações implementadas:
+Existem apenas dois subprojetos Spring Boot, com integração HTTP síncrona implementada entre Banco DUP e Signatária na Entrega 3.3:
 
-* `duplicata-escritural-financiamento-api`: bootstrap da aplicação e configuração do Actuator;
+* `duplicata-escritural-financiamento-api`: Banco DUP, com bootstrap, Actuator e os casos de uso de solicitar autorização, consultar autorização e consultar Duplicatas locais autorizadas. Utiliza a porta de saída `GatewayRegistradora` e o adapter de infraestrutura `GatewayRegistradoraHttp`, baseado em `RestClient`, sem compartilhar entidades ou persistência da Signatária;
 * `duplicata-escritural-signataria-api`: aplicação existente renomeada conforme o ADR 0003, com Actuator, PostgreSQL/JPA/Flyway, recebimento durável, consulta e processamento assíncrono de Escrituração Manual com criação de Duplicata local. Possui Sacador local, CNPJ numérico/alfanumérico, autenticação Bearer exclusivamente local e idempotência transacional. O agendador exige habilitação explícita. A Entrega 3.1 acrescenta identidades distintas de Sacador e Financiador e autorização local simulada de consulta em `consultarecebiveis`. A Entrega 3.2 acrescenta consulta paginada de Duplicatas locais pelo Financiador beneficiário, condicionada a autorização ATIVA e vigente, com isolamento por Sacador e CNPJ completo. Não equivale a uma Agenda regulatória completa. Registro regulatório e IUD permanecem planejados. Ver [Escrituração](docs/escrituracao-manual.md) e [autorização e consulta local](docs/autorizacao-consulta.md).
 
 Estrutura existente (pasta do repositório preservada):
@@ -154,25 +154,27 @@ A aplicação existente foi renomeada de `duplicata-escritural-escrituradora-api
 
 Na Entrega 3.2, `consultarecebiveis` solicita uma projeção paginada à aplicação de Escrituração, sem acessar `DuplicataRepository` diretamente. Escrituração mantém a propriedade de `Duplicata`, de seu repository e dos dados imutáveis da emissão. Cada consulta revalida a autorização no banco; revogação confirmada bloqueia novas consultas. O endpoint é somente local simulado, sem snapshot entre páginas e sem cálculo de disponibilidade financeira.
 
+Na Entrega 3.3, os casos de uso do Banco DUP são beans de aplicação, sem novos endpoints de entrada. A integração exige provisionamento Bearer do Financiador no perfil `local`, com URL e timeouts de conexão/leitura configuráveis e tratamento explícito de falhas HTTP, transporte, timeout e resposta incompatível. Não há cache, retry automático da aplicação ou circuit breaker. As revisões técnicas da 3.2 e da 3.3 foram favoráveis; o encerramento formal permanece descrito no [roadmap](docs/roadmap.md).
+
 A identidade de persistência foi preservada: banco e schema `escrituradora`, variáveis `ESCRITURADORA_DB_*`, serviço `postgres-escrituradora`, volume `postgres-escrituradora-data`, credenciais, conexões e configurações Flyway/JPA permanecem inalterados. A porta HTTP continua 8081. A renomeação não implica migração física dos dados.
 
-Fluxo conceitual da primeira versão conforme o ADR 0003 aceito (a aplicação Signatária já foi renomeada; as portas e integrações ainda não estão implementadas):
+Fluxo da primeira versão conforme o ADR 0003 aceito (integração Banco DUP–Signatária implementada; Interoperabilidade permanece futura):
 
 ```text
 duplicata-escritural-financiamento-api
         |
-        | GatewayRegistradora
+        | GatewayRegistradora -> adapter RestClient -> HTTP
         v
-duplicata-escritural-signataria-api (aplicação existente; capacidades planejadas)
+duplicata-escritural-signataria-api (Escrituração e consulta local implementadas; Registro regulatório planejado)
         |
-        | GatewayInteroperabilidade, quando necessário
+        | GatewayInteroperabilidade (conceitual; integração futura)
         v
 duplicata-escritural-interoperabilidade-api (aplicação futura)
 ```
 
-O Financiamento não deve implementar lógica de roteamento ou interoperabilidade. O ADR 0003 define as fronteiras e a consolidação das capacidades na aplicação existente; os contratos concretos das portas serão refinados nos primeiros casos de uso. Interoperabilidade continua futura e só será criada quando houver um caso de uso que justifique a aplicação independente.
+O Financiamento não deve implementar lógica de roteamento ou interoperabilidade. O ADR 0003 define as fronteiras e a consolidação das capacidades na aplicação existente; `GatewayRegistradora` já possui os três casos de uso locais da Entrega 3.3. Novas capacidades e os contratos de Interoperabilidade serão refinados quando houver casos de uso concretos. Interoperabilidade continua futura e só será criada quando houver um caso de uso que justifique a aplicação independente.
 
-## duplicata-escritural-financiamento-api — responsabilidades planejadas
+## duplicata-escritural-financiamento-api — responsabilidades atuais e planejadas
 
 Representa o Banco DUP no papel de Agente Financiador.
 
@@ -208,9 +210,9 @@ Preferencialmente permanecem como módulos internos enquanto compartilharem:
 * ciclo de vida;
 * necessidade operacional.
 
-Como simplificação da primeira versão aceita no ADR 0003, o financiamento integrará uma única infraestrutura contratada, simulada pela Signatária B3-like, por uma porta candidata como `GatewayRegistradora`. Essa escolha não é uma regra universal do domínio nem define um novo executável.
+Como simplificação da primeira versão aceita no ADR 0003, o financiamento se integra a uma única infraestrutura contratada, simulada pela Signatária B3-like, pela porta implementada `GatewayRegistradora`. Essa escolha não é uma regra universal do domínio nem define um novo executável. Elegibilidade, pricing, contratação e demais regras de crédito continuam planejados.
 
-Poderá solicitar capacidades de negócio como:
+Além dos três casos de uso locais implementados, poderá solicitar futuramente capacidades de negócio como:
 
 * solicitar Opt-in;
 * consultar Agenda;
@@ -308,13 +310,13 @@ Não assuma que a topologia física do projeto representa a topologia real das i
 
 # 5. Fronteiras arquiteturais do ecossistema
 
-Esta seção preserva a separação entre o Agente Financiador e a infraestrutura de mercado: o Financiamento não implementa roteamento nem interoperabilidade. A integração com uma única infraestrutura contratada e a consolidação de Escrituração e Registro na aplicação existente foram aceitas no ADR 0003 para a primeira versão. A implementação das capacidades e integrações permanece pendente.
+Esta seção preserva a separação entre o Agente Financiador e a infraestrutura de mercado: o Financiamento não implementa roteamento nem interoperabilidade. A integração com uma única infraestrutura contratada e a consolidação de Escrituração e Registro na aplicação existente foram aceitas no ADR 0003 para a primeira versão. A integração HTTP para solicitar/consultar autorização e consultar Duplicatas locais está implementada; Registro regulatório e Interoperabilidade permanecem planejados.
 
 Escriturador identifica o papel de escrituração; Registradora, o papel de registro. Na [Convenção de Duplicatas Escriturais, Glossário](https://www.bcb.gov.br/content/estabilidadefinanceira/spb_docs/convencoes/Conven%C3%A7%C3%A3o%20entre%20Entidades%20Registradoras,%20Deposit%C3%A1rios%20Centrais%20e%20Escrituradores%20-%20Duplicatas%20Escriturais.pdf), Signatária é um termo abrangente para a entidade que atua como Escriturador, Registradora ou Depositário Central, conforme o contexto. O Ambiente de Interoperabilidade compreende a Base de Controle e os mecanismos de troca de informações entre Signatárias. Esses conceitos não implicam um serviço executável para cada papel.
 
 ## Fronteira do Financiamento
 
-Na simplificação da primeira versão aceita no ADR 0003, `duplicata-escritural-financiamento-api` se integrará com a infraestrutura contratada por uma porta futura, cujo nome candidato é `GatewayRegistradora`. O nome definitivo e os métodos serão refinados no primeiro caso de uso.
+Na simplificação da primeira versão aceita no ADR 0003, `duplicata-escritural-financiamento-api` se integra com a infraestrutura contratada pela porta de saída `GatewayRegistradora`, no domínio de `consultarecebiveis`. Seus métodos implementados são `solicitarAutorizacao`, `consultarAutorizacao` e `consultarDuplicatas`; o adapter HTTP fica na infraestrutura de integração com a Signatária.
 
 O financiamento NÃO deve:
 
@@ -334,10 +336,10 @@ financiamento-api -> SignatariaExternaClient
 financiamento-api -> RegistradoraExternaClient
 ```
 
-A interação da primeira versão, aceita e ainda não implementada, é:
+A interação implementada para os três casos de uso locais da primeira versão é:
 
 ```text
-financiamento-api -> GatewayRegistradora (conceitual) -> infraestrutura contratada
+financiamento-api -> GatewayRegistradora -> adapter RestClient -> HTTP -> signataria-api
 ```
 
 A infraestrutura contratada abstrai do Financiamento a localização, o roteamento e a interoperabilidade. Conforme o ADR 0003, as responsabilidades de Registradora e Escriturador permanecerão distintas por capacidade dentro de uma única aplicação B3-like.
@@ -568,11 +570,11 @@ GatewayRegistradora
 GatewayInteroperabilidade
 ```
 
-`GatewayRegistradora` é o nome conceitual proposto para uma porta futura entre o Financiamento e a Registradora contratada no cenário simplificado da primeira versão.
+`GatewayRegistradora` é a porta de saída implementada entre o Financiamento e a Registradora contratada no cenário simplificado da primeira versão. Utiliza modelos próprios do Financiamento e possui adapter HTTP com `RestClient` na infraestrutura.
 
 `GatewayInteroperabilidade` é o nome conceitual proposto para uma porta futura entre a infraestrutura de mercado simulada e o Ambiente de Interoperabilidade.
 
-Nenhuma dessas portas é uma interface implementada. O ADR 0003 aceita as fronteiras e mantém os nomes e métodos concretos para refinamento nos primeiros casos de uso. Preserve `GatewayEscrituradora` nos exemplos anteriores e avalie sua responsabilidade conforme o caso de uso; não o substitua automaticamente por `GatewayRegistradora`.
+`GatewayRegistradora` é uma interface implementada pelo adapter; `GatewayInteroperabilidade` continua conceitual. O ADR 0003 aceita essas fronteiras; novos contratos serão refinados nos casos de uso correspondentes. Preserve `GatewayEscrituradora` nos exemplos anteriores e avalie sua responsabilidade conforme o caso de uso; não o substitua automaticamente por `GatewayRegistradora`.
 
 As portas do Financiamento não devem lhe atribuir lógica de roteamento ou interoperabilidade. A simplificação de integrar uma única infraestrutura contratada na primeira versão não estabelece uma proibição universal de outras integrações de negócio.
 
@@ -868,7 +870,7 @@ Escolha a estratégia de acordo com o problema.
 
 # 20. Resiliência
 
-Quando existirem as integrações entre Financiamento e sua Registradora contratada ou entre Signatária e Ambiente de Interoperabilidade, trate cada fronteira como integração distribuída real.
+Trate a integração existente entre Financiamento e sua Registradora contratada como integração distribuída real. Ela possui timeouts de conexão/leitura e falhas tipadas, sem retry automático da aplicação ou circuit breaker. A futura integração entre Signatária e Ambiente de Interoperabilidade deverá preservar esse tratamento de fronteira externa.
 
 Uma falha na interoperabilidade deve ser tratada pela Signatária B3-like. O Financiamento não deve contornar indisponibilidade acessando diretamente a Base de Controle, o Ambiente de Interoperabilidade ou qualquer participante externo.
 
@@ -1002,7 +1004,7 @@ Os contratos públicos da B3 são a referência documental do projeto. As capaci
 
 Não modele instituições reais adicionais como participantes implementados. Quando um cenário exigir outra ponta para testar interoperabilidade, utilize um identificador genérico, como `SIGNATARIA_EXTERNA_001`, e documente que a resposta é simulada.
 
-No cenário simplificado da primeira versão aceito no ADR 0003, o `duplicata-escritural-financiamento-api` integrará a infraestrutura contratada e não acessará outros participantes para executar roteamento ou interoperabilidade.
+No cenário simplificado da primeira versão aceito no ADR 0003, o `duplicata-escritural-financiamento-api` se integra à infraestrutura contratada e não acessa outros participantes para executar roteamento ou interoperabilidade.
 
 Exemplos de acessos de roteamento ou interoperabilidade que não pertencem ao Financiamento:
 
@@ -1013,7 +1015,7 @@ SignatariaExternaClient
 RegistradoraExternaClient
 ```
 
-Detalhes de localização, roteamento e interoperabilidade pertencem à infraestrutura de mercado. `GatewayRegistradora` é um nome candidato de porta; os contratos concretos serão refinados nos primeiros casos de uso, respeitando as fronteiras aceitas no ADR 0003.
+Detalhes de localização, roteamento e interoperabilidade pertencem à infraestrutura de mercado. `GatewayRegistradora` já é a porta implementada para os três casos de uso locais da Entrega 3.3; novos contratos serão refinados conforme a necessidade, respeitando as fronteiras aceitas no ADR 0003.
 
 ---
 
@@ -1055,7 +1057,7 @@ Não apresente apenas a solução escolhida.
 
 Uma boa decisão arquitetural deve conseguir explicar por que alternativas foram descartadas.
 
-Preserve o histórico dos ADRs: não reescreva decisões anteriores para refletir decisões posteriores. O ADR 0003 está aceito e a renomeação da aplicação existente para Signatária foi implementada. Escrituração possui recebimento, consulta e processamento assíncrono com criação de Duplicata local. A autorização local simulada de consulta está em `consultarecebiveis`; geração do IUD, Registro regulatório e integrações permanecem planejados. Os ADRs 0001, 0002 e 0003 permanecem históricos, inclusive suas descrições do estado anterior à renomeação; eventuais conflitos de negócio ou interoperabilidade devem ser conciliados antes da implementação. Nomes e métodos concretos das portas serão refinados nos primeiros casos de uso.
+Preserve o histórico dos ADRs: não reescreva decisões anteriores para refletir decisões posteriores. O ADR 0003 está aceito e a renomeação da aplicação existente para Signatária foi implementada. Escrituração possui recebimento, consulta e processamento assíncrono com criação de Duplicata local. A autorização e a consulta local simulada estão em `consultarecebiveis`; o Banco DUP as consome por HTTP via `GatewayRegistradora`. Geração do IUD, Registro regulatório, Interoperabilidade, MCP e agentes de IA permanecem planejados. Os ADRs 0001, 0002 e 0003 permanecem históricos, inclusive suas descrições do estado anterior à renomeação; eventuais conflitos de negócio ou interoperabilidade devem ser conciliados antes da implementação. Novos contratos serão refinados nos casos de uso correspondentes, preservando os três métodos já implementados da porta do Financiamento.
 
 Toda revisão arquitetural deve responder:
 

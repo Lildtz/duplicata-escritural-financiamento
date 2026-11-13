@@ -8,7 +8,7 @@ O progresso é registrado com base nas implementações conhecidas. Uma funciona
 
 ## Estado atual
 
-**Entrega 4.2 — Observabilidade fundamental aprovada tecnicamente em 13/11/2026, com Code Review concluído favoravelmente; versionamento pendente de autorização explícita.** A 4.1 foi aprovada tecnicamente em 13/11/2026 e versionada isoladamente em `03290c8`. A 3.4 foi encerrada e versionada em `27e950e`, após aprovação técnica em 13/11/2026.
+**Entrega 4.3 — CI e GitHub Flow implementados e validados localmente; Code Review, aceite técnico e execução remota pendentes.** A 4.2 foi aprovada tecnicamente em 13/11/2026 e versionada em `54357e8`. A 4.1 permanece versionada em `03290c8` e a 3.4 em `27e950e`.
 
 | Entrega | Descrição                                 | Situação                          |
 | ------- | ----------------------------------------- | --------------------------------- |
@@ -20,8 +20,8 @@ O progresso é registrado com base nas implementações conhecidas. Uma funciona
 | 3.3     | Integração HTTP do Banco DUP              | Aprovação técnica final em 13/11/2026; versionada em `04081ca` |
 | 3.4     | Validação vertical do fluxo               | Aprovação técnica final em 13/11/2026; versionada em `27e950e` |
 | 4.1     | OpenAPI e Swagger UI                      | Aprovada tecnicamente em 13/11/2026; versionada em `03290c8` |
-| 4.2     | Observabilidade                          | Aprovação técnica final em 13/11/2026; versionamento pendente de autorização explícita |
-| 4.3     | CI com GitHub Actions                     | Planejada |
+| 4.2     | Observabilidade                          | Aprovação técnica final em 13/11/2026; versionada em `54357e8` |
+| 4.3     | CI com GitHub Actions                     | Implementada e validada localmente; Code Review, aceite e execução remota pendentes |
 | 4.4     | Monitoramento                            | Planejada |
 | 4.5     | CD                                       | Planejada; estratégia de deploy a definir |
 
@@ -290,7 +290,7 @@ dos testes HTTP de Swagger UI aprovados. Após autorização explícita, o commi
 
 ## Entrega 4.2 — Observabilidade fundamental
 
-**Situação: implementada e validada; aprovação técnica final em 13/11/2026, com Code Review concluído favoravelmente. Versionamento pendente de autorização explícita.**
+**Situação: implementada e validada; aprovação técnica final em 13/11/2026, com Code Review concluído favoravelmente. Versionada em `54357e8` após autorização explícita.**
 
 - [x] Confirmar a 4.1 encerrada em commit independente e árvore limpa antes de iniciar.
 - [x] Adotar o starter OpenTelemetry gerenciado pelo Boot nas duas aplicações.
@@ -305,7 +305,7 @@ dos testes HTTP de Swagger UI aprovados. Após autorização explícita, o commi
 - [x] Aprovar os ajustes de robustez dos testes JDBC e Awaitility.
 - [x] Aprovar três execuções independentes do teste OTLP.
 - [x] Encerrar Code Review e registrar aprovação técnica final em 13/11/2026.
-- [ ] Versionar após autorização.
+- [x] Versionar após autorização, no commit `54357e8d53aa6796f70ac6faa587523cb73c7382`.
 
 A validação específica passou com 29 testes do Banco DUP e 44 da Signatária,
 sem falhas, erros ou ignorados. O novo caso vertical verifica `traceparent`, bit
@@ -338,22 +338,61 @@ entre elas, passaram em 1min, 43s e 41s. A suíte vertical completa passou com d
 testes em 1min03s. O último `clean build --console=plain` passou em 2min21s: 277
 testes (101 do Financiamento e 176 da Signatária), zero falhas, erros e ignorados.
 Essas correções e evidências foram aprovadas tecnicamente em 13/11/2026; o Code
-Review está encerrado favoravelmente. Apenas o versionamento aguarda autorização
-explícita. Nenhum backend externo de monitoramento foi validado.
+Review está encerrado favoravelmente. O versionamento foi autorizado e registrado
+em `54357e8`, preservando o pacote de 35 arquivos. Nenhum backend externo de
+monitoramento foi validado.
 
 O processamento não persiste contexto de trace: a correlação com o recebimento
 usa o ID técnico. Não há novos spans SQL/JDBC, retry da integração, coletor
 obrigatório, dashboards ou monitoramento centralizado. AGENTS e ADRs preservados.
 
+## Entrega 4.3 — CI com GitHub Actions e GitHub Flow
+
+**Situação: implementada e validada localmente. Code Review, aceite técnico e comprovação remota pendentes.**
+
+- [x] Confirmar a feature branch `feat/4.3-github-actions`, base `54357e8` e árvore inicialmente limpa.
+- [x] Criar um workflow com PRs para `main`, pushes em `main` e execução manual.
+- [x] Configurar um único job estável `Build e testes`, Ubuntu 24.04 e Temurin 21.
+- [x] Utilizar Wrapper com bit executável Git e validação pelo `setup-gradle`.
+- [x] Preservar build completo, Testcontainers e os dez testes verticais, incluindo OTLP.
+- [x] Usar somente cache básico do `setup-gradle`, sem cache Gradle duplicado.
+- [x] Preservar XML/HTML e gerar resumo numérico JUnit mesmo após falha.
+- [x] Restringir permissões a `contents: read`, sem credenciais persistidas, deploy ou publicação de releases.
+- [x] Documentar GitHub Flow em `CONTRIBUTING.md`, sem branches permanentes adicionais.
+- [x] Concluir validações locais, build completo e revisão do diff.
+- [ ] Obter Code Review e aceite técnico.
+- [ ] Versionar e publicar a branch após autorização explícita.
+- [ ] Abrir o primeiro PR e comprovar a execução real no GitHub/Linux.
+- [ ] Configurar o status check obrigatório nas regras de `main`, após comprovação.
+
+O workflow usa actions estáveis fixadas por SHA: checkout 7.0.1, setup-java 6.2.0,
+setup-gradle 6.4.1 e upload-artifact 7.0.2. O build é
+`./gradlew clean build --no-daemon --console=plain`; não há filtros, exclusões ou
+quantidade fixa de testes como critério. PostgreSQL é provisionado por Testcontainers.
+Resumo e upload usam `always()`, preservando a falha de qualquer etapa obrigatória.
+Os artefatos incluem somente XMLs JUnit e relatórios HTML, com retenção de sete dias.
+
+O cache básico aberto evita o provedor comercial opcional do setup-gradle 6.
+Fixar SHAs exige atualização manual das actions e conferência das releases oficiais.
+Não há badge, publicação remota ou proteção de branch configurada nesta preparação.
+A execução em Windows e a análise de configuração não comprovam execução Linux.
+O Ubuntu/WSL local está sem Java; a suíte completa no runner, as portas dinâmicas,
+as duas JVMs, exportação OTLP, limpeza e upload ainda precisam de execução real no GitHub.
+
+Validação em 13/11/2026: YAML analisado com SnakeYAML 2.6 já disponível no cache
+Gradle, com asserções de eventos, job, SHAs, permissões, cache, Wrapper e caminhos
+de relatórios. Não havia actionlint instalado; isso não equivale à validação do
+interpretador de expressões/runner do GitHub. O resumo Python foi exercitado com
+ausência de XMLs e com totais de falhas, erros e ignorados. O build local Windows
+`.\gradlew.bat clean build --console=plain` passou em 2min58s: 277 testes (101 do
+Financiamento e 176 da Signatária), incluindo os dez verticais, sem falhas, erros
+ou ignorados. O conteúdo do Wrapper foi preservado; somente seu modo Git mudou
+de 100644 para 100755. `git diff --check` passou. Não houve commit, push ou PR
+da 4.3 nesta preparação; a comprovação remota permanece pendente.
+
 ## Planejamento restante da Fase 4
 
 Sequência aprovada; as entregas abaixo permanecem planejadas e não foram iniciadas.
-
-### 4.3 — CI com GitHub Actions
-
-- Java 21 e Gradle Wrapper.
-- Testcontainers, testes verticais e relatórios de testes.
-- Status checks.
 
 ### 4.4 — Monitoramento
 

@@ -1,0 +1,79 @@
+name: CI
+
+"on":
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build e testes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Obter código
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Configurar Java 21
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Configurar Gradle e validar Wrapper
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-provider: basic
+          validate-wrappers: true
+
+      - name: Verificar Docker
+        run: docker info --format '{{.ServerVersion}}'
+
+      - name: Executar build completo
+        run: ./gradlew clean build --no-daemon --console=plain
+
+      - name: Resumir resultados JUnit
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          arquivos = sorted(Path('.').glob('**/build/test-results/test/**/*.xml'))
+          totais = dict.fromkeys(('tests', 'failures', 'errors', 'skipped'), 0)
+          for arquivo in arquivos:
+              suite = ET.parse(arquivo).getroot()
+              for campo in totais:
+                  totais[campo] += int(suite.get(campo, 0))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as resumo:
+              resumo.write('## Resultados JUnit\n\n')
+              if arquivos:
+                  resumo.write('| Executados | Falhas | Erros | Ignorados |\n|---|---|---|---|\n')
+                  resumo.write('| {} | {} | {} | {} |\n'.format(*totais.values()))
+              else:
+                  resumo.write('Nenhum XML JUnit disponível; consulte as etapas anteriores.\n')
+          PY
+
+      - name: Preservar relatórios de testes
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: relatorios-testes
+          path: |
+            **/build/test-results/test/**/*.xml
+            **/build/reports/tests/test/**
+          if-no-files-found: warn
+          retention-days: 7

@@ -77,4 +77,34 @@ aprovação pelo Sacador → ATIVA → consulta paginada. Há verificações de 
 recusa, revogação entre páginas, expiração, idempotência e paginação inválida.
 A suíte também é executada por `.\gradlew.bat clean build`.
 Veja [pré-condições, sequência e limitações](../../docs/autorizacao-consulta.md#entrega-34--validação-vertical).
-A aprovação técnica final da 3.4 foi registrada em 13/11/2026; o versionamento permanece pendente de autorização explícita.
+A aprovação técnica final da 3.4 foi registrada em 13/11/2026; o versionamento autorizado está em `27e950e`.
+
+## OpenAPI e Swagger UI (Entrega 4.1)
+
+Com PostgreSQL ativo e o arquivo ignorado de identidades locais provisionado conforme
+o [guia de autorização](../../docs/autorizacao-consulta.md#identidades-e-provisionamento-local), inicie:
+
+```powershell
+.\gradlew.bat :duplicata-escritural-signataria-api:bootRun "--args=--spring.profiles.active=local --spring.config.additional-location=optional:file:./.env.signataria.local.yml"
+```
+
+`bootRun` usa o diretório do subprojeto: nesse comando, o arquivo ignorado de
+identidades deve estar em `duplicata-escritural-signataria-api/.env.signataria.local.yml`.
+Não versione o arquivo nem credenciais. A URL e o provisionamento PostgreSQL seguem
+as configurações anteriores; nenhum cadastro ou token padrão é acrescentado.
+
+Acesse `http://localhost:8081/swagger-ui.html` (redireciona para a UI) e
+`http://localhost:8081/v3/api-docs` (JSON gerado). Esses caminhos e os recursos da
+UI são públicos somente em `local`. Os caminhos de negócio continuam protegidos.
+No **Authorize**, informe apenas o token opaco fictício do participante, sem `Bearer `.
+Não há JWT, emissor de tokens ou autorização implícita pelo Swagger. Fora de `local`,
+OpenAPI e UI ficam desabilitados e bloqueados pela segurança.
+
+Teste a documentação e o bloqueio sem perfil local, sem depender do Compose:
+
+```powershell
+.\gradlew.bat :duplicata-escritural-signataria-api:test --tests '*OpenApiHttpTests' --tests '*SignatariaApplicationTests'
+```
+
+Os testes requerem Docker e usam PostgreSQL/Testcontainers, portas dinâmicas e
+identidades aleatórias. Consulte [contratos, limites e evidências](../../docs/escrituracao-manual.md#openapi-3-e-swagger-ui--entrega-41).

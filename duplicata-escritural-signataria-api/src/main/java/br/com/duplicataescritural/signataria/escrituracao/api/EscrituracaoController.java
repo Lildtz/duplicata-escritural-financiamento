@@ -5,6 +5,14 @@ import java.time.Instant;
 import java.util.UUID;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 
 import br.com.duplicataescritural.signataria.escrituracao.aplicacao.ServicoEscrituracao;
 import br.com.duplicataescritural.signataria.escrituracao.dominio.ChaveIdempotencia;
@@ -24,6 +32,12 @@ import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/v1/escrituracoes")
+@SecurityRequirement(name = "BearerLocal")
+@ApiResponses({
+        @ApiResponse(responseCode = "401", ref = "#/components/responses/NaoAutenticado"),
+        @ApiResponse(responseCode = "403", ref = "#/components/responses/PapelNegado"),
+        @ApiResponse(responseCode = "500", ref = "#/components/responses/FalhaEscrituracao"),
+        @ApiResponse(responseCode = "503", ref = "#/components/responses/IndisponibilidadeEscrituracao")})
 public class EscrituracaoController {
 
     private final ServicoEscrituracao servico;
@@ -33,7 +47,19 @@ public class EscrituracaoController {
     }
 
     @PostMapping("/manuais")
-    public ResponseEntity<RespostaProcessamento> solicitar(@AuthenticationPrincipal SacadorAutenticado autenticado,
+    @Operation(summary = "Receber Escrituração Manual", tags = "Escrituração Manual",
+            description = "SACADOR_LOCAL. Identidade vem do token/cadastro. Recebimento durável não confirma Escrituração. "
+                    + "Mesma chave e conteúdo normalizado preservam ID, instante, PENDENTE e Location, inclusive após processamento.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/RequisicaoEscrituracao"),
+            @ApiResponse(responseCode = "202", description = "Recebimento confirmado após commit.",
+                    headers = @Header(name = "Location", description = "GET do processamento.", schema = @Schema(type = "string")),
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = RespostaProcessamento.class))),
+            @ApiResponse(responseCode = "409", ref = "#/components/responses/ConflitoEscrituracao"),
+            @ApiResponse(responseCode = "422", ref = "#/components/responses/DadosEscrituracaoInvalidos")})
+    public ResponseEntity<RespostaProcessamento> solicitar(@Parameter(hidden = true) @AuthenticationPrincipal SacadorAutenticado autenticado,
+            @Parameter(required = true, description = "Gerada pelo chamador; escopo Sacador/operação; sem expiração automática. "
+                    + "Reenvio deve manter chave e conteúdo.", schema = @Schema(minLength = 1, maxLength = 128, pattern = "[A-Za-z0-9._:-]+"))
             @RequestHeader(value = "Idempotency-Key", required = false) String chave,
             @RequestBody SolicitacaoEscrituracaoRequest solicitacao) {
         var dados = solicitacao.paraDominio();
@@ -51,7 +77,15 @@ public class EscrituracaoController {
     }
 
     @GetMapping("/processamentos/{idProcessamento}")
-    public RespostaProcessamento consultar(@AuthenticationPrincipal SacadorAutenticado autenticado,
+    @Operation(summary = "Consultar processamento", tags = "Processamentos",
+            description = "SACADOR_LOCAL correspondente. Estado atual: PENDENTE, EM_PROCESSAMENTO, CONCLUIDO, REJEITADO ou FALHA_TECNICA. "
+                    + "CONCLUIDO significa somente criação da Duplicata local; campos sem aplicação são omitidos.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Estado atual do processamento.", content = @Content(mediaType = "application/json",
+                    schema = @Schema(implementation = RespostaProcessamento.class))),
+            @ApiResponse(responseCode = "422", ref = "#/components/responses/DadosEscrituracaoInvalidos"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/ProcessamentoNaoEncontrado")})
+    public RespostaProcessamento consultar(@Parameter(hidden = true) @AuthenticationPrincipal SacadorAutenticado autenticado,
                                           @PathVariable UUID idProcessamento) {
         return resposta(servico.consultar(idProcessamento, autenticado.sacador().id())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Processamento não encontrado")));
@@ -67,7 +101,13 @@ public class EscrituracaoController {
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record RespostaProcessamento(UUID idProcessamento, ProcessamentoEscrituracao.Estado status,
-                                       Instant recebidoEm, UUID idDuplicata, Instant escrituradaEm,
-                                       Instant finalizadoEm, String codigo, String motivo) { }
+    public record RespostaProcessamento(
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) UUID idProcessamento,
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) ProcessamentoEscrituracao.Estado status,
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant recebidoEm,
+            @Schema(description = "Somente CONCLUIDO; UUID técnico, não é IUD.") UUID idDuplicata,
+            @Schema(description = "Somente CONCLUIDO.") Instant escrituradaEm,
+            @Schema(description = "Somente estados terminais.") Instant finalizadoEm,
+            @Schema(description = "Código seguro somente em REJEITADO/FALHA_TECNICA.") String codigo,
+            @Schema(description = "Motivo seguro somente em REJEITADO/FALHA_TECNICA.") String motivo) { }
 }

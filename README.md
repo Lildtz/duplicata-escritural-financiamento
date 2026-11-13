@@ -55,7 +55,7 @@ A presença de uma tecnologia nesta lista não significa que ela já esteja impl
 
 ## Estado do projeto
 
-**Fase de referência: Entrega 3.4 com validação vertical automatizada e aprovação técnica final em 13/11/2026; versionamento pendente de autorização.** A 3.3 recebeu aprovação técnica final em 13/11/2026 e foi versionada no commit `04081ca`.
+**Fase de referência: Entrega 4.1 — OpenAPI e Swagger UI aprovada tecnicamente em 13/11/2026, com Code Review encerrado favoravelmente; versionamento pendente de autorização.** A validação da UI foi HTTP, sem inspeção visual efetiva. A 3.4 foi versionada em `27e950e`; a 3.3 permanece em `04081ca`.
 
 As Entregas 1, 2, 3.1 e 3.2 estão implementadas. A 3.2 recebeu aprovação técnica retrospectiva em 13/11/2026, sem evidência de aceite histórico anterior, conforme o [roadmap](docs/roadmap.md). A 3.4 exercita o fluxo completo do simulador, preservando as fronteiras entre as aplicações.
 
@@ -112,6 +112,12 @@ Para executar somente o fluxo vertical, com Java 21 e Docker disponíveis:
 ```
 
 O Wrapper gera o JAR da Signatária; o teste provisiona participantes, tokens aleatórios e portas dinâmicas, recebe Escriturações Manuais e aguarda seu processamento antes de solicitar/aprovar autorizações e consultar páginas. Não requer Compose, configuração manual de credenciais ou dados preexistentes. A suíte também integra o `clean build`. Veja [sequência, cenários e limites da validação vertical](docs/autorizacao-consulta.md#entrega-34--validação-vertical).
+
+## OpenAPI e Swagger UI locais
+
+Na Signatária com perfil `local` e identidades provisionadas conforme o [guia local](infra/local/README.md), acesse `http://localhost:8081/swagger-ui.html` ou `http://localhost:8081/v3/api-docs`. A documentação é pública somente nesse perfil; os endpoints de negócio continuam exigindo Bearer opaco e os papéis corretos. Em **Authorize**, informe apenas um token fictício provisionado pelo operador, sem o prefixo `Bearer`.
+
+O JSON é gerado dos controllers/DTOs existentes, sem especificação estática versionada. O Banco DUP não recebe springdoc nem endpoints novos. Consulte [contratos, erros, segurança e testes da documentação](docs/escrituracao-manual.md#openapi-3-e-swagger-ui--entrega-41).
 
 ## Evolução do projeto
 O desenvolvimento segue entregas incrementais, priorizando funcionalidades verificáveis, testes automatizados e decisões arquiteturais justificadas.

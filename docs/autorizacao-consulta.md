@@ -13,6 +13,10 @@ ele existir. Não há novo projeto Gradle, dependência, serviço executável ou
 Os valores técnicos CNPJ e chave idempotente são reutilizados da Escrituração,
 sem mover classes ou duplicar modelos persistentes.
 
+A documentação OpenAPI/Swagger da Signatária está disponível somente em `local`;
+veja [acesso, autenticação e testes](escrituracao-manual.md#openapi-3-e-swagger-ui--entrega-41).
+Ela não concede acesso às operações: papéis, beneficiário e vigência continuam validados a cada chamada.
+
 ## Identidades e provisionamento local
 
 O mecanismo Bearer continua exclusivo do perfil `local`. Sem esse perfil, todas as
@@ -467,7 +471,7 @@ sem alterar as fronteiras arquiteturais ou presumir aprovação formal das entre
 
 ## Entrega 3.4 — validação vertical
 
-**Implementada e validada; aprovação técnica final do Code Review registrada em 13/11/2026. Versionamento pendente de autorização explícita.**
+**Implementada e validada; aprovação técnica final em 13/11/2026 e versionamento autorizado em `27e950e`.**
 A 3.3 foi encerrada e versionada em `04081ca`. Esta validação não acrescenta
 capacidades de negócio, endpoints ou mudanças de segurança às aplicações.
 
@@ -603,5 +607,5 @@ continua uma referência local do Banco DUP, sem snapshot entre páginas. Não h
 retry automático, cache ou circuit breaker. Os testes de transporte da 3.3 permanecem.
 Nenhum defeito funcional das entregas anteriores foi identificado nesta validação.
 AGENTS e ADRs continuam coerentes e não foram alterados. A aprovação técnica final
-da 3.4 foi registrada em 13/11/2026; o pacote aguarda autorização explícita para
-criar o commit, sem push nesta preparação.
+da 3.4 foi registrada em 13/11/2026; após autorização explícita, os sete arquivos
+foram versionados em `27e950e`, sem mudanças da 4.1 nesse commit e sem push.

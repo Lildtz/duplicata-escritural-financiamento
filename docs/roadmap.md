@@ -8,7 +8,7 @@ O progresso é registrado com base nas implementações conhecidas. Uma funciona
 
 ## Estado atual
 
-**Entrega 3.4 — validação vertical automatizada com aprovação técnica final em 13/11/2026; versionamento pendente de autorização.** A 3.3 foi encerrada no commit `04081ca`, após aprovação técnica final em 13/11/2026.
+**Entrega 4.1 — OpenAPI e Swagger UI aprovada tecnicamente em 13/11/2026, com Code Review encerrado favoravelmente; versionamento pendente de autorização.** A 3.4 foi encerrada e versionada em `27e950e`, após aprovação técnica em 13/11/2026.
 
 | Entrega | Descrição                                 | Situação                          |
 | ------- | ----------------------------------------- | --------------------------------- |
@@ -18,7 +18,12 @@ O progresso é registrado com base nas implementações conhecidas. Uma funciona
 | 3.1     | Identidades e autorização de consulta     | Implementada                      |
 | 3.2     | Consulta local protegida de recebíveis    | Aprovação técnica retrospectiva em 13/11/2026 |
 | 3.3     | Integração HTTP do Banco DUP              | Aprovação técnica final em 13/11/2026; versionada em `04081ca` |
-| 3.4     | Validação vertical do fluxo               | Aprovação técnica final em 13/11/2026; versionamento pendente de autorização |
+| 3.4     | Validação vertical do fluxo               | Aprovação técnica final em 13/11/2026; versionada em `27e950e` |
+| 4.1     | OpenAPI e Swagger UI                      | Aprovada tecnicamente em 13/11/2026; versionamento pendente de autorização |
+| 4.2     | Observabilidade                          | Planejada |
+| 4.3     | CI com GitHub Actions                     | Planejada |
+| 4.4     | Monitoramento                            | Planejada |
+| 4.5     | CD                                       | Planejada; estratégia de deploy a definir |
 
 ---
 
@@ -187,7 +192,7 @@ O fluxo real entre as duas aplicações não foi executado nesta entrega; perman
 
 ### 3.4 — Validação vertical
 
-**Situação: validação vertical implementada e executada com sucesso; aprovação técnica final do Code Review registrada em 13/11/2026. Versionamento pendente de autorização explícita.**
+**Situação: validação vertical aprovada tecnicamente em 13/11/2026 e versionada em `27e950e`, após autorização explícita.**
 
 - [x] Executar ambas as aplicações integradas.
 - [x] Validar solicitação de autorização pelo Banco DUP.
@@ -226,8 +231,8 @@ de teste e a expiração manteve relógio real, com margem de 30s/45s. A prova
 incremental confirmou `UP-TO-DATE` sem mudanças e reexecução ao alterar somente
 o conteúdo do JAR. O build completo seguinte passou em 2min38s, novamente com
 263 testes aprovados, incluindo os nove verticais, sem falhas, erros ou ignorados.
-A aprovação técnica final foi registrada em 13/11/2026; não equivale à autorização
-para criar o commit. O pacote está em preparação para versionamento, sem commit ou push.
+A aprovação técnica final foi registrada em 13/11/2026. Após autorização explícita,
+o commit `27e950e` versionou exclusivamente os sete arquivos da 3.4, sem alterações da 4.1 e sem push.
 
 **Limites:** o Banco DUP é iniciado sem servidor HTTP, pois os casos de uso não
 possuem endpoints de entrada. A comunicação de saída é HTTP real. O teste exige
@@ -239,7 +244,76 @@ IUD ou interoperabilidade. Nenhuma próxima entrega foi iniciada.
 
 ---
 
-## Evoluções previstas após a Entrega 3
+## Entrega 4.1 — OpenAPI 3 e Swagger UI
+
+**Situação: implementada e validada por HTTP; aprovada tecnicamente em 13/11/2026, com Code Review encerrado favoravelmente. Versionamento pendente de autorização explícita.**
+
+- [x] Separar a 4.1 do commit de encerramento da 3.4.
+- [x] Adotar springdoc 3.2.0 somente na Signatária, compatível com Spring Boot 4.1.x.
+- [x] Gerar OpenAPI das sete operações HTTP existentes, com DTOs reais e Bearer opaco.
+- [x] Expor documentação somente no perfil `local`, mantendo filtros e papéis de negócio.
+- [x] Validar JSON, parâmetros, schemas, respostas e recursos da UI por HTTP real.
+- [x] Executar regressões HTTP afetadas.
+- [x] Executar e registrar o build completo.
+- [x] Concluir documentação e revisão do diff.
+- [x] Encerrar o Code Review com parecer técnico final favorável em 13/11/2026.
+- [x] Registrar aprovação técnica da 4.1 em 13/11/2026.
+
+Swagger usa os caminhos padrão `/swagger-ui.html` e `/v3/api-docs`, sem documentação
+de Actuator ou novos endpoints de negócio. Fora de `local`, OpenAPI/UI ficam
+desabilitados e as rotas documentais permanecem bloqueadas. Não há alteração em
+domínio, persistência ou autenticação. A verificação encontrou uma inconsistência
+documental anterior: UUID malformado no GET de processamento retorna 422 pelo
+handler existente; o guia foi corrigido sem alterar a regra ou o tratamento de erro.
+Procedimentos e evidências estão no [guia técnico](escrituracao-manual.md#openapi-3-e-swagger-ui--entrega-41).
+Em 13/11/2026, os testes específicos com regressões HTTP passaram em 61/61 casos.
+O build final `.\gradlew.bat clean build` passou em 2min24s: 270 testes (100 do
+Financiamento e 170 da Signatária), sem falhas, erros ou ignorados. O JSON gerado,
+os quatro grupos e os recursos da UI foram verificados por HTTP, com filtros ativos.
+A Signatária também iniciou como JAR em ambiente descartável; a inspeção visual
+foi interrompida pelo Computer Use por não conseguir determinar a URL atual do
+Chrome no Windows com confiança para aplicar sua política. Não se declara inspeção
+visual realizada. Processo e container descartáveis foram encerrados.
+Observabilidade/monitoramento e a próxima entrega permanecem futuros.
+
+Na verificação final dos contratos, os testes HTTP confirmaram 401 por Bearer
+ausente/inválido e 403 por papel inadequado com `application/problem+json;charset=UTF-8`;
+o 403 de autorização própria sem permissão usa `application/problem+json`.
+Os media types coincidem com o OpenAPI, sem alteração nos filtros, handlers ou
+componentes documentais. As asserções preservam os corpos distintos e o desafio
+`WWW-Authenticate: Bearer` somente no 401. Os 61 testes HTTP afetados passaram;
+o novo build completo passou em 2min04s, com 270 testes (100 do Financiamento e
+170 da Signatária), sem falhas, erros ou ignorados. A aprovação técnica foi registrada
+em 13/11/2026, preservando a limitação da inspeção visual não realizada e a evidência
+dos testes HTTP de Swagger UI aprovados. O pacote aguarda autorização explícita
+para criar o commit; nenhum versionamento da 4.1 ou push foi realizado nesta preparação.
+
+## Planejamento restante da Fase 4
+
+Sequência aprovada; as entregas abaixo permanecem planejadas e não foram iniciadas.
+
+### 4.2 — Observabilidade
+
+- Logs estruturados e correlação.
+- Métricas e tracing distribuído.
+
+### 4.3 — CI com GitHub Actions
+
+- Java 21 e Gradle Wrapper.
+- Testcontainers, testes verticais e relatórios de testes.
+- Status checks.
+
+### 4.4 — Monitoramento
+
+- Prometheus e Grafana.
+- Dashboards e SLIs/SLOs.
+
+### 4.5 — CD
+
+- Empacotamento e publicação.
+- Estratégia de deploy a definir.
+
+## Evoluções previstas
 
 As próximas capacidades ainda não possuem numeração definitiva de entrega. Sua prioridade será revisada conforme o estado da plataforma.
 

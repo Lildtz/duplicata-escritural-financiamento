@@ -38,3 +38,13 @@ management:
     web:
       exposure:
         include: health,info
+
+springdoc:
+  api-docs:
+    enabled: false
+    version: OPENAPI_3_0
+  swagger-ui:
+    enabled: false
+  paths-to-match: /api/v1/**
+  show-actuator: false
+  override-with-generic-response: false

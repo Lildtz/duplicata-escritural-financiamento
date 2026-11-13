@@ -93,8 +93,8 @@ Os códigos e exemplos terminais estão no [guia de processamento](processamento
 | Token ausente, inválido ou associado a cadastro inexistente | 401, com WWW-Authenticate: Bearer |
 | Sacador desabilitado | 403 |
 | Processamento inexistente ou pertencente a outro Sacador | 404 |
-| JSON, campo desconhecido, UUID ou chave inválidos | 400 |
-| Violação das validações da solicitação | 422 |
+| JSON, campo desconhecido ou chave inválidos | 400 |
+| Violação das validações da solicitação ou UUID de processamento malformado | 422 |
 | Mesma chave com conteúdo normalizado diferente | 409 |
 | Falha de persistência reconhecidamente transitória ou recuperável | 503 |
 | Falha de persistência não transitória ou sem classificação segura | 500 |
@@ -172,7 +172,7 @@ uma consulta nativa para SKIP LOCKED; Duplicata e transições usam JPA.
 
 SQL nos testes serve para fixtures independentes do mapeamento, alterações de
 cadastro externas à sessão JPA e verificações do schema/Flyway. Não implementa CRUD de produção.
-Spring Security continua sendo a única dependência adicionada à stack inicial.
+Na Entrega 1, Spring Security foi a dependência acrescentada à stack inicial.
 
 ## Organização e trade-off de persistência
 
@@ -323,3 +323,119 @@ um pedido antigo e aplica V2 preservando conteúdo e checksum. O teste JPA conti
 lendo JSON no formato anterior. Triggers no PostgreSQL descartável injetam falhas;
 um Clock controlável determina backoff e expiração. A coordenação concorrente usa
 latches e futures com timeout, sem Thread.sleep.
+
+## OpenAPI 3 e Swagger UI — Entrega 4.1
+
+**Aprovada tecnicamente em 13/11/2026, com Code Review encerrado favoravelmente; versionamento pendente de autorização.** A validação da UI foi HTTP, sem inspeção visual efetiva. A 3.4 está isolada no commit
+`27e950e`; esta entrega acrescenta documentação, sem novas capacidades de negócio.
+O starter `org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.0` está somente na
+Signatária. A [matriz oficial](https://springdoc.org/faq.html#what-is-the-compatibility-matrix-of-springdoc-openapi-with-spring-boot)
+indica Spring Boot 4.1.x com springdoc 3.1.x–3.2.x; o projeto mantém Boot 4.1.1.
+
+### Acesso e autenticação
+
+Inicie PostgreSQL e provisione as identidades locais conforme os guias anteriores.
+O [guia local](../infra/local/README.md#openapi-e-swagger-ui-entrega-41) contém o
+comando de inicialização com `local` e o arquivo ignorado de identidades.
+
+* UI: `http://localhost:8081/swagger-ui.html`, redirecionando para `/swagger-ui/index.html`.
+* JSON gerado: `http://localhost:8081/v3/api-docs`.
+* Configuração da UI: `/v3/api-docs/swagger-config`.
+
+São as URLs padrão; adapte a origem se a porta for configurada. Somente GET dessas
+rotas e `/swagger-ui/**` está liberado sem Bearer no perfil `local`. As propriedades
+`springdoc.api-docs.enabled` e `springdoc.swagger-ui.enabled` são falsas por padrão
+e verdadeiras somente em `application-local.yml`. Os filtros de negócio permanecem
+ativos; fora de `local` as rotas documentais também são bloqueadas por segurança.
+Actuator não integra a especificação de negócio.
+
+Em **Authorize**, informe apenas o token opaco fictício provisionado pelo operador;
+a UI acrescenta o prefixo Bearer. Não há token padrão, JWT, OAuth2, OpenID Connect
+ou endpoint de emissão. O token identifica o participante e seu papel; o Banco DUP
+não define livremente o beneficiário por headers. Aprovação, revogação e consultas
+continuam sujeitas às regras reais. `persist-authorization=false` evita persistir
+a credencial da UI entre sessões. Não compartilhe capturas ou requisições com tokens.
+
+### Cobertura dos contratos
+
+O JSON OpenAPI 3.0 é gerado dos controllers e DTOs existentes; não há arquivo estático
+gerado versionado nem modelos HTTP paralelos. As operações são agrupadas em
+Escrituração Manual, Processamentos, Autorizações de consulta e Consulta de Duplicatas.
+
+| Método e caminho | Papel | Sucesso |
+|---|---|---|
+| POST `/api/v1/escrituracoes/manuais` | Sacador | 202 e Location |
+| GET `/api/v1/escrituracoes/processamentos/{idProcessamento}` | Sacador correspondente | 200 |
+| POST `/api/v1/autorizacoes-consulta` | Financiador | 201 e Location |
+| GET `/api/v1/autorizacoes-consulta/{id}` | Sacador correspondente ou Financiador beneficiário | 200 |
+| PUT `/api/v1/autorizacoes-consulta/{id}/decisao` | Sacador correspondente | 200 |
+| DELETE `/api/v1/autorizacoes-consulta/{id}` | Sacador correspondente ou Financiador beneficiário | 204, sem corpo |
+| GET `/api/v1/autorizacoes-consulta/{id}/duplicatas` | Financiador beneficiário, autorização ATIVA e vigente | 200 |
+
+Os schemas descrevem UUID, CNPJ completo numérico/alfanumérico, valores decimais,
+datas, instantes, estados, campos obrigatórios e campos omitidos conforme o estado.
+Os dois POSTs exigem Idempotency-Key; suas repetições válidas mantêm respectivamente
+202/201, representação original e Location. Paginação usa `pagina=0`, `tamanho=50`,
+máximo 100; não aceita sort ou expansão de escopo pelo cliente. Cada página revalida
+a autorização, inclusive após revogação e expiração; ATIVA não equivale a vigente.
+
+Os erros permanecem distintos: segurança retorna `status/title`; handlers de
+Escrituração retornam Problem Detail; autorizações acrescentam `codigo`. Respostas
+403/500/503 documentam as alternativas possíveis entre filtro e handler, sem
+uniformizar o JSON. Há 400/401/403/404/409/422/500/503 somente nas operações aplicáveis.
+O 404 alheio/inexistente é genérico. Não há contrato de rate limiting/429.
+
+A validação HTTP da 4.1 identificou uma inconsistência no texto anterior: UUID
+malformado no GET de processamento retorna 422, pois a causa IllegalArgumentException
+é tratada pelo handler existente. O teste compara esse resultado com a documentação;
+o handler e a semântica de negócio foram preservados. GET de autorização com UUID
+malformado continua documentado com 400 pelo seu handler específico.
+
+### Testes e limites
+
+Com Java 21 e Docker, execute na raiz:
+
+```powershell
+.\gradlew.bat :duplicata-escritural-signataria-api:test --tests '*OpenApiHttpTests' --tests '*SignatariaApplicationTests'
+.\gradlew.bat :duplicata-escritural-signataria-api:test --tests '*OpenApiHttpTests' --tests '*SignatariaApplicationTests' --tests '*EscrituracaoHttpTests' --tests '*AutorizacaoConsultaHttpTests'
+.\gradlew.bat clean build
+git diff --check
+git status --short
+```
+
+Os testes usam HTTP real, portas dinâmicas, PostgreSQL/Testcontainers, Flyway e
+filtros ativos. Verificam as sete operações e ausência de Actuator, schemas e
+formatos, obrigatoriedade, respostas, Bearer, idempotência, paginação, recursos da UI,
+negócio protegido e bloqueio sem perfil local. O primeiro ensaio específico detectou
+problemas na documentação/assertions e na fixture; foram corrigidos sem alterar
+handlers ou regras de negócio. A execução seguinte com regressões passou em
+61 testes, sem falhas, erros ou ignorados. Em 13/11/2026, o build final completo
+passou em 2min24s: 270 testes (100 do Financiamento e 170 da Signatária), sem
+falhas, erros ou ignorados, incluindo os nove testes verticais. `git diff --check`
+passou. Compilação sem avisos novos; o aviso de CDS do OpenJDK nos testes com
+instrumentação permanece sem impedir o build.
+
+A Signatária real também foi iniciada pelo JAR no perfil `local`, com porta dinâmica,
+PostgreSQL descartável, Flyway e identidades efêmeras, confirmando health 200.
+A inspeção visual foi tentada com Computer Use, mas a ferramenta interrompeu a
+automação por não conseguir determinar com confiança a URL atual do Chrome no
+Windows para aplicar sua política. Não houve inspeção visual efetiva: o carregamento
+da UI e de seus recursos está comprovado pelos testes HTTP. O processo e o container
+adicionais foram encerrados. O comando interativo `bootRun` com arquivo do operador
+não foi executado; as configurações locais foram exercitadas pelos testes e pelo JAR.
+
+**Problema → alternativas → decisão → trade-offs → consequências:** manter contratos
+consultáveis e sincronizados → especificação estática ou geração dos controllers →
+springdoc com anotações pontuais e uma configuração local → dependência de documentação
+e metadados nos DTOs/controladores, sem novos modelos ou geradores → contratos
+verificados pelo JSON gerado; erro de anotação pode falhar o teste antes da revisão.
+OpenAPI 3.0 foi escolhido explicitamente para manter formatos e restrições numéricas
+convencionais. A geração automática de erros globais foi desabilitada para documentar
+os handlers aplicáveis sem atribuir respostas de uma capacidade à outra.
+
+Swagger não amplia o domínio: Duplicata local não é Agenda regulatória completa,
+valor nominal não é saldo financiável, UUID não é IUD. Registro, interoperabilidade,
+crédito e observabilidade adicional continuam futuros. O Banco DUP permanece sem
+API de entrada desses casos de uso e sem dependência springdoc. AGENTS e ADRs não
+foram alterados. A aprovação técnica da 4.1 foi registrada em 13/11/2026, com Code
+Review encerrado favoravelmente. O versionamento permanece pendente de autorização explícita.

@@ -1,5 +1,6 @@
 package br.com.duplicataescritural.financiamento.consultarecebiveis.infraestrutura.integracao.signataria;
 
+import io.micrometer.observation.ObservationRegistry;
 import java.net.http.HttpClient;
 import java.time.Clock;
 
@@ -19,19 +20,19 @@ import org.springframework.web.client.RestClient;
 @EnableConfigurationProperties(ConexaoSignataria.class)
 public class ConfiguracaoSignataria {
     @Bean
-    GatewayRegistradora gatewayRegistradora(ConexaoSignataria conexao) {
+    GatewayRegistradora gatewayRegistradora(ConexaoSignataria conexao, RestClient.Builder builder) {
         var http = HttpClient.newBuilder().connectTimeout(conexao.timeoutConexao())
                 .followRedirects(HttpClient.Redirect.NEVER).build();
         var factory = new JdkClientHttpRequestFactory(http);
         factory.setReadTimeout(conexao.timeoutLeitura());
-        var client = RestClient.builder().baseUrl(conexao.urlBase().toString()).requestFactory(factory)
+        var client = builder.baseUrl(conexao.urlBase().toString()).requestFactory(factory)
                 .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + conexao.token())
                 .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE).build();
         return new GatewayRegistradoraHttp(client);
     }
 
     @Bean
-    ServicoConsultaRecebiveis servicoConsultaRecebiveis(GatewayRegistradora registradora) {
-        return new ServicoConsultaRecebiveis(registradora, Clock.systemUTC());
+    ServicoConsultaRecebiveis servicoConsultaRecebiveis(GatewayRegistradora registradora, ObservationRegistry observacoes) {
+        return new ServicoConsultaRecebiveis(registradora, Clock.systemUTC(), observacoes);
     }
 }

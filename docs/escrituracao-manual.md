@@ -435,7 +435,8 @@ os handlers aplicáveis sem atribuir respostas de uma capacidade à outra.
 
 Swagger não amplia o domínio: Duplicata local não é Agenda regulatória completa,
 valor nominal não é saldo financiável, UUID não é IUD. Registro, interoperabilidade,
-crédito e observabilidade adicional continuam futuros. O Banco DUP permanece sem
+crédito e monitoramento centralizado continuam futuros. A instrumentação fundamental
+é descrita na [Entrega 4.2](observabilidade.md). O Banco DUP permanece sem
 API de entrada desses casos de uso e sem dependência springdoc. AGENTS e ADRs não
 foram alterados. A aprovação técnica da 4.1 foi registrada em 13/11/2026, com Code
-Review encerrado favoravelmente. O versionamento permanece pendente de autorização explícita.
+Review encerrado favoravelmente. Após autorização explícita, a 4.1 foi versionada em `03290c8`.

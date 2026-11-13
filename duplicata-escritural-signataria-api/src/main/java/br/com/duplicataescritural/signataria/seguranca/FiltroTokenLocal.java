@@ -35,6 +35,7 @@ final class FiltroTokenLocal extends OncePerRequestFilter {
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String caminho = request.getServletPath();
         return !caminho.startsWith("/api/v1/escrituracoes/")
+                && !caminho.equals("/actuator/metrics") && !caminho.startsWith("/actuator/metrics/")
                 && !caminho.equals("/api/v1/autorizacoes-consulta")
                 && !caminho.startsWith("/api/v1/autorizacoes-consulta/");
     }

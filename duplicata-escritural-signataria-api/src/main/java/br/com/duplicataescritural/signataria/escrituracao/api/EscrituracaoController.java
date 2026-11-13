@@ -1,5 +1,6 @@
 package br.com.duplicataescritural.signataria.escrituracao.api;
 
+import br.com.duplicataescritural.signataria.observabilidade.Observabilidade;
 import java.net.URI;
 import java.time.Instant;
 import java.util.UUID;
@@ -41,9 +42,11 @@ import org.springframework.web.server.ResponseStatusException;
 public class EscrituracaoController {
 
     private final ServicoEscrituracao servico;
+    private final Observabilidade observabilidade;
 
-    public EscrituracaoController(ServicoEscrituracao servico) {
+    public EscrituracaoController(ServicoEscrituracao servico, Observabilidade observabilidade) {
         this.servico = servico;
+        this.observabilidade = observabilidade;
     }
 
     @PostMapping("/manuais")
@@ -69,7 +72,11 @@ public class EscrituracaoController {
         } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, exception.getMessage());
         }
-        var processamento = servico.receber(autenticado.sacador(), chaveValidada, dados);
+        var processamento = observabilidade.observar("receber_escrituracao", () -> {
+            var recebido = servico.receber(autenticado.sacador(), chaveValidada, dados);
+            observabilidade.recebimentoConfirmado(recebido);
+            return recebido;
+        });
         return ResponseEntity.accepted()
                 .location(URI.create("/api/v1/escrituracoes/processamentos/" + processamento.id()))
                 .body(new RespostaProcessamento(processamento.id(), ProcessamentoEscrituracao.Estado.PENDENTE,

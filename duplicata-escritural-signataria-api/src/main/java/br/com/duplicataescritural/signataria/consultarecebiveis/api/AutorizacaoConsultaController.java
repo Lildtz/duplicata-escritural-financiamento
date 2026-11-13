@@ -1,5 +1,6 @@
 package br.com.duplicataescritural.signataria.consultarecebiveis.api;
 
+import br.com.duplicataescritural.signataria.observabilidade.Observabilidade;
 import java.net.URI;
 import java.time.Clock;
 import java.time.Instant;
@@ -56,10 +57,12 @@ import org.springframework.web.server.ResponseStatusException;
 public class AutorizacaoConsultaController {
     private final ServicoAutorizacaoConsulta servico;
     private final Clock relogio;
+    private final Observabilidade observabilidade;
 
-    public AutorizacaoConsultaController(ServicoAutorizacaoConsulta servico, Clock relogio) {
+    public AutorizacaoConsultaController(ServicoAutorizacaoConsulta servico, Clock relogio, Observabilidade observabilidade) {
         this.servico = servico;
         this.relogio = relogio;
+        this.observabilidade = observabilidade;
     }
 
     @PostMapping
@@ -85,7 +88,8 @@ public class AutorizacaoConsultaController {
         } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Idempotency-Key inválida ou ausente");
         }
-        var autorizacao = servico.solicitar(financiador, chaveValidada, new Cnpj(solicitacao.cnpjSacador()), solicitacao.fimVigencia());
+        var autorizacao = observabilidade.observar("solicitar_autorizacao", () ->
+                servico.solicitar(financiador, chaveValidada, new Cnpj(solicitacao.cnpjSacador()), solicitacao.fimVigencia()));
         // Repetições do POST preservam o recebimento original, inclusive após decisão ou expiração.
         var recebimento = new RespostaAutorizacao(autorizacao.id(), autorizacao.financiadorId(),
                 autorizacao.cnpjSacador().valor(), AutorizacaoConsulta.Estado.PENDENTE, false,
@@ -100,7 +104,7 @@ public class AutorizacaoConsultaController {
     @ApiResponse(responseCode = "200", description = "Estado e vigência atuais.", content = @Content(mediaType = "application/json",
             schema = @Schema(implementation = RespostaAutorizacao.class)))
     public RespostaAutorizacao consultar(@Parameter(hidden = true) @AuthenticationPrincipal ParticipanteAutenticado participante, @PathVariable UUID id) {
-        return resposta(servico.consultar(participante, id));
+        return resposta(observabilidade.observar("consultar_autorizacao", () -> servico.consultar(participante, id)));
     }
 
     @GetMapping("/{id}/duplicatas")
@@ -122,7 +126,8 @@ public class AutorizacaoConsultaController {
                 || parametros.values().stream().anyMatch(valores -> valores.size() != 1 || valores.getFirst().isBlank())) {
             throw new ParametrosConsultaInvalidos();
         }
-        var resultado = servico.consultarDuplicatas(participante, id, pagina, tamanho);
+        var resultado = observabilidade.observar("consultar_duplicatas", () ->
+                servico.consultarDuplicatas(participante, id, pagina, tamanho));
         var duplicatas = resultado.duplicatas();
         return new RespostaDuplicatas(resultado.cnpjSacador(), "LOCAL_SIMULADO", duplicatas.getContent(),
                 duplicatas.getNumber(), duplicatas.getSize(), duplicatas.hasNext());
@@ -147,7 +152,7 @@ public class AutorizacaoConsultaController {
             @ApiResponse(responseCode = "422", ref = "#/components/responses/DadosAutorizacaoInvalidos")})
     public RespostaAutorizacao decidir(@Parameter(hidden = true) @AuthenticationPrincipal SacadorAutenticado sacador, @PathVariable UUID id,
             @Valid @RequestBody DecisaoAutorizacao decisao) {
-        return resposta(servico.decidir(sacador, id, decisao.decisao()));
+        return resposta(observabilidade.observar("decidir_autorizacao", () -> servico.decidir(sacador, id, decisao.decisao())));
     }
 
     @DeleteMapping("/{id}")
@@ -157,7 +162,10 @@ public class AutorizacaoConsultaController {
     @ApiResponses({@ApiResponse(responseCode = "204", description = "Revogação confirmada, sem corpo.", content = @Content),
             @ApiResponse(responseCode = "409", ref = "#/components/responses/ConflitoAutorizacao")})
     public ResponseEntity<Void> revogar(@Parameter(hidden = true) @AuthenticationPrincipal ParticipanteAutenticado participante, @PathVariable UUID id) {
-        servico.revogar(participante, id);
+        observabilidade.observar("revogar_autorizacao", () -> {
+            servico.revogar(participante, id);
+            return null;
+        });
         return ResponseEntity.noContent().build();
     }
 

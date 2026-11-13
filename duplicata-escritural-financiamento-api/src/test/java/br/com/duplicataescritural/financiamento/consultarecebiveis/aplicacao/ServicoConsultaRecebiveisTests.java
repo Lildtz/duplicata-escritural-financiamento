@@ -5,6 +5,9 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.core.instrument.observation.DefaultMeterObservationHandler;
+import io.micrometer.observation.ObservationRegistry;
 
 import br.com.duplicataescritural.financiamento.consultarecebiveis.dominio.AutorizacaoConsulta;
 import br.com.duplicataescritural.financiamento.consultarecebiveis.dominio.FalhaRegistradora;
@@ -27,7 +30,16 @@ class ServicoConsultaRecebiveisTests {
     private static final Instant AGORA = Instant.parse("2030-01-01T00:00:00Z");
     private final UUID id = UUID.randomUUID();
     private final GatewayRegistradora gateway = mock(GatewayRegistradora.class);
-    private final ServicoConsultaRecebiveis servico = new ServicoConsultaRecebiveis(gateway, Clock.fixed(AGORA, ZoneOffset.UTC));
+    private final SimpleMeterRegistry metricas = new SimpleMeterRegistry();
+    private final ObservationRegistry observacoes = registro();
+    private final ServicoConsultaRecebiveis servico = new ServicoConsultaRecebiveis(gateway,
+            Clock.fixed(AGORA, ZoneOffset.UTC), observacoes);
+
+    private ObservationRegistry registro() {
+        var registro = ObservationRegistry.create();
+        registro.observationConfig().observationHandler(new DefaultMeterObservationHandler(metricas));
+        return registro;
+    }
 
     @Test
     void solicitaSemAlterarChaveOuImpedirRepeticaoIdempotenteAposFimDaVigencia() {
@@ -109,6 +121,15 @@ class ServicoConsultaRecebiveisTests {
         var falha = new FalhaRegistradora(motivo);
         when(gateway.consultarDuplicatas(id, new PaginacaoConsulta(0, 50))).thenThrow(falha);
         assertThatThrownBy(() -> servico.consultarDuplicatas(id)).isSameAs(falha);
+        String resultado = switch (motivo) {
+            case AUTENTICACAO_REJEITADA, ACESSO_NEGADO, RECURSO_NAO_ENCONTRADO, PARAMETROS_INVALIDOS, CONFLITO -> "rejeitado";
+            default -> "falha";
+        };
+        var timer = metricas.get("financiamento.registradora.operacao").tag("operacao", "consultar_duplicatas")
+                .tag("resultado", resultado).tag("motivo", motivo.name()).timer();
+        assertThat(timer.count()).isEqualTo(1);
+        assertThat(timer.getId().getTags()).extracting(io.micrometer.core.instrument.Tag::getKey)
+                .containsExactlyInAnyOrder("operacao", "resultado", "motivo", "error");
         verify(gateway).consultarDuplicatas(id, new PaginacaoConsulta(0, 50));
         verifyNoMoreInteractions(gateway);
     }

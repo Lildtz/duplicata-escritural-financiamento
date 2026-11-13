@@ -1,5 +1,6 @@
 package br.com.duplicataescritural.signataria.escrituracao.aplicacao;
 
+import br.com.duplicataescritural.signataria.observabilidade.Observabilidade;
 import java.sql.SQLException;
 import java.sql.SQLRecoverableException;
 import java.sql.SQLTransientException;
@@ -16,8 +17,6 @@ import br.com.duplicataescritural.signataria.escrituracao.infraestrutura.persist
 import br.com.duplicataescritural.signataria.escrituracao.infraestrutura.persistencia.ProcessamentoEscrituracaoRepository;
 import br.com.duplicataescritural.signataria.escrituracao.infraestrutura.persistencia.SacadorRepository;
 import org.hibernate.exception.ConstraintViolationException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.dao.RecoverableDataAccessException;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.stereotype.Service;
@@ -28,7 +27,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 public class ServicoProcessamentoEscrituracao {
-    private static final Logger LOG = LoggerFactory.getLogger(ServicoProcessamentoEscrituracao.class);
     private static final Set<String> UNICIDADES_COMERCIAIS = Set.of("uk_duplicata_sacador_numero",
             "uk_duplicata_sacador_fatura_parcela");
 
@@ -38,10 +36,12 @@ public class ServicoProcessamentoEscrituracao {
     private final Clock relogio;
     private final ConfiguracaoProcessamento configuracao;
     private final TransactionTemplate transacao;
+    private final Observabilidade observabilidade;
 
     public ServicoProcessamentoEscrituracao(ProcessamentoEscrituracaoRepository processamentos, DuplicataRepository duplicatas,
             SacadorRepository sacadores, Clock relogio, ConfiguracaoProcessamento configuracao,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager, Observabilidade observabilidade) {
+        this.observabilidade = observabilidade;
         this.processamentos = processamentos;
         this.duplicatas = duplicatas;
         this.sacadores = sacadores;
@@ -56,7 +56,7 @@ public class ServicoProcessamentoEscrituracao {
     public void processarProximo() {
         reservarProximo().ifPresent(reserva -> {
             try {
-                executar(reserva);
+                observabilidade.observar("executar_escrituracao", () -> { executar(reserva); return null; });
             } catch (RuntimeException exception) {
                 // execute só retorna/lança após commit/rollback: T3 nunca reutiliza uma transação abortada.
                 registrarFalha(reserva, exception);
@@ -76,13 +76,17 @@ public class ServicoProcessamentoEscrituracao {
                 var abandonada = new ReservaExecucao(processamento.id(), processamento.tentativas());
                 processamento.falhar(abandonada, agora, true, configuracao.maximoTentativas(),
                         configuracao.esperaApos(abandonada.tentativa()), CodigoResultado.RESERVA_EXPIRADA);
+                observabilidade.transicaoAposCommit(processamento);
                 return Optional.empty();
             }
             if (processamento.tentativas() >= configuracao.maximoTentativas()) {
                 processamento.esgotarTentativas(agora, configuracao.maximoTentativas());
+                observabilidade.transicaoAposCommit(processamento);
                 return Optional.empty();
             }
-            return Optional.of(processamento.reservar(agora, configuracao.duracaoReserva(), configuracao.maximoTentativas()));
+            var reserva = processamento.reservar(agora, configuracao.duracaoReserva(), configuracao.maximoTentativas());
+            observabilidade.transicaoAposCommit(processamento);
+            return Optional.of(reserva);
         });
     }
 
@@ -104,6 +108,7 @@ public class ServicoProcessamentoEscrituracao {
             }
             processamento.concluir(reserva, duplicata, agora);
             processamentos.flush();
+            observabilidade.transicaoAposCommit(processamento);
         });
     }
 
@@ -121,8 +126,7 @@ public class ServicoProcessamentoEscrituracao {
                 processamento.falhar(reserva, agora, codigo == CodigoResultado.FALHA_TRANSITORIA,
                         configuracao.maximoTentativas(), configuracao.esperaApos(reserva.tentativa()), codigo);
             }
-            LOG.info("Falha de escrituração: processamento={} tentativa={} codigo={}",
-                    reserva.idProcessamento(), reserva.tentativa(), codigo);
+            observabilidade.transicaoAposCommit(processamento);
         });
     }
 

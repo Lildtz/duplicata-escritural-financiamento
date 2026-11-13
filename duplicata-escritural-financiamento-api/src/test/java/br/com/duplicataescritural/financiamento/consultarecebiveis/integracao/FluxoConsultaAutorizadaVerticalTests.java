@@ -24,6 +24,15 @@ import br.com.duplicataescritural.financiamento.consultarecebiveis.dominio.Gatew
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
+import io.micrometer.observation.ObservationHandler;
+import org.springframework.http.client.observation.ClientRequestObservationContext;
+import io.opentelemetry.proto.trace.v1.Span;
 import org.junit.jupiter.api.io.CleanupMode;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -42,12 +51,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
 @Testcontainers
+@ExtendWith(OutputCaptureExtension.class)
 class FluxoConsultaAutorizadaVerticalTests {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:18-alpine");
     @TempDir(cleanup = CleanupMode.ON_SUCCESS)
     static Path temporario;
     private static final String BASE = "/api/v1/autorizacoes-consulta";
+    private static ReceptorOtlp otlp;
     private static SignatariaReal signataria;
     private static ConfigurableApplicationContext banco;
     private static ServicoConsultaRecebiveis consultas;
@@ -55,8 +66,9 @@ class FluxoConsultaAutorizadaVerticalTests {
 
     @BeforeAll
     static void iniciarAplicacoesEEscriturar() throws Exception {
+        otlp = new ReceptorOtlp();
         signataria = new SignatariaReal(temporario.resolve("signataria.log"));
-        signataria.iniciar(POSTGRES);
+        signataria.iniciar(POSTGRES, otlp.endpoint());
         banco = banco(TOKEN_FINANCIADOR);
         consultas = banco.getBean(ServicoConsultaRecebiveis.class);
         assertThat(banco.getBean(GatewayRegistradora.class)).isInstanceOf(GatewayRegistradoraHttp.class);
@@ -73,8 +85,134 @@ class FluxoConsultaAutorizadaVerticalTests {
         try {
             if (banco != null) banco.close();
         } finally {
-            if (signataria != null) signataria.close();
+            try { if (signataria != null) signataria.close(); }
+            finally { if (otlp != null) otlp.close(); }
         }
+    }
+
+    @Test
+    void propagaW3cEntreJvmsERegistraLogsMetricasEWorkerSeguros(CapturedOutput output) throws Exception {
+        var registro = banco.getBean(ObservationRegistry.class);
+        var metricas = banco.getBean(MeterRegistry.class);
+        var cabecalhos = new java.util.concurrent.CopyOnWriteArrayList<String>();
+        registro.observationConfig().observationHandler(new ObservationHandler<ClientRequestObservationContext>() {
+            @Override public boolean supportsContext(Observation.Context contexto) {
+                return contexto instanceof ClientRequestObservationContext;
+            }
+            @Override public void onStop(ClientRequestObservationContext contexto) {
+                cabecalhos.add(contexto.getCarrier().getHeaders().getFirst("traceparent"));
+            }
+        });
+        long antes = metricas.find("financiamento.registradora.operacao").timers().stream()
+                .mapToLong(io.micrometer.core.instrument.Timer::count).sum();
+        String trace;
+        var raiz = Observation.start("validacao.vertical", registro);
+        try (var scope = raiz.openScope()) {
+            trace = banco.getBean(io.micrometer.tracing.Tracer.class).currentSpan().context().traceId();
+            var autorizacao = solicitar(CNPJ, "observabilidade");
+            falha(() -> consultas.consultarDuplicatas(autorizacao.idAutorizacao()), Motivo.ACESSO_NEGADO);
+            decidir(autorizacao, TOKEN_SACADOR, "APROVAR");
+            consultas.consultarAutorizacao(autorizacao.idAutorizacao());
+            consultas.consultarDuplicatas(autorizacao.idAutorizacao(), 0, 1);
+        } finally {
+            raiz.stop();
+        }
+        assertThat(cabecalhos).hasSize(4).allSatisfy(header -> {
+            assertThat(header).matches("00-" + trace + "-[0-9a-f]{16}-[0-9a-f]{2}");
+            assertThat(Integer.parseInt(header.substring(53), 16) & 1).isEqualTo(1);
+        });
+        assertThat(metricas.find("financiamento.registradora.operacao").timers().stream()
+                .mapToLong(io.micrometer.core.instrument.Timer::count).sum()).isEqualTo(antes + 4);
+        assertThat(metricas.find("financiamento.registradora.operacao").tag("resultado", "rejeitado")
+                .tag("motivo", "ACESSO_NEGADO").timer().count()).isPositive();
+        assertThat(metricas.find("http.client.requests").timers()).isNotEmpty();
+        assertThat(metricas.find("http.client.requests").timers()).anySatisfy(timer ->
+                assertThat(timer.getId().getTag("uri")).contains("/{id}/duplicatas"));
+        assertThat(metricas.find("jvm.memory.used").gauges()).isNotEmpty();
+        for (var medidor : metricas.getMeters()) {
+            if (medidor.getId().getName().startsWith("financiamento.")
+                    || medidor.getId().getName().equals("http.client.requests")) {
+                assertThat(medidor.getId().getTags().toString()).doesNotContain(CNPJ, FINANCIADOR.toString(),
+                        "pagina=0", "tamanho=1", TOKEN_FINANCIADOR);
+            }
+        }
+        await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> {
+            var spans = otlp.spans.stream().filter(s -> hexadecimal(s.span().getTraceId()).equals(trace)).toList();
+            var rootOptional = spans.stream().filter(s -> s.span().getName().equals("validacao.vertical")).findFirst();
+            assertThat(rootOptional).as("Span raiz disponível no receptor OTLP").isPresent();
+            var root = rootOptional.orElseThrow();
+            var casos = spans.stream().filter(s -> s.servico().endsWith("financiamento-api")
+                    && s.span().getName().equals("financiamento.registradora.operacao")).toList();
+            assertThat(casos).hasSize(4).allSatisfy(s ->
+                    assertThat(s.span().getParentSpanId()).isEqualTo(root.span().getSpanId()));
+            var clientes = spans.stream().filter(s -> s.span().getKind() == Span.SpanKind.SPAN_KIND_CLIENT).toList();
+            assertThat(clientes).extracting(s -> hexadecimal(s.span().getSpanId()))
+                    .containsExactlyInAnyOrderElementsOf(cabecalhos.stream().map(h -> h.substring(36, 52)).toList());
+            assertThat(clientes).hasSize(4).allSatisfy(cliente -> {
+                assertThat(casos).anySatisfy(caso -> assertThat(caso.span().getSpanId()).isEqualTo(cliente.span().getParentSpanId()));
+                var servidorOptional = spans.stream().filter(s -> s.servico().endsWith("signataria-api")
+                        && s.span().getKind() == Span.SpanKind.SPAN_KIND_SERVER
+                        && s.span().getParentSpanId().equals(cliente.span().getSpanId())).findFirst();
+                assertThat(servidorOptional).as("Span servidor disponível no receptor OTLP").isPresent();
+                var servidor = servidorOptional.orElseThrow();
+                assertThat(servidor.span().getSpanId()).isNotEqualTo(cliente.span().getSpanId());
+                assertThat(spans).anySatisfy(aplicacao -> {
+                    assertThat(aplicacao.span().getName()).isEqualTo("signataria.operacao");
+                    var porId = spans.stream().collect(java.util.stream.Collectors.toMap(
+                            s -> s.span().getSpanId(), ReceptorOtlp.Recebido::span));
+                    var pai = aplicacao.span().getParentSpanId();
+                    while (!pai.isEmpty() && !pai.equals(servidor.span().getSpanId()) && porId.containsKey(pai)) {
+                        pai = porId.get(pai).getParentSpanId();
+                    }
+                    assertThat(pai).isEqualTo(servidor.span().getSpanId());
+                });
+            });
+        });
+        var eventosBanco = linhasJson(output.getOut()).stream().filter(e -> trace.equals(e.path("traceId").asString())).toList();
+        assertThat(eventosBanco).hasSize(4).allSatisfy(e -> {
+            assertThat(e.path("service").asString()).endsWith("financiamento-api");
+            assertThat(e.path("spanId").asString()).matches("[0-9a-f]{16}");
+            assertThat(e.has("@timestamp") && e.has("level") && e.has("logger_name") && e.has("message")).isTrue();
+        });
+        var eventosSignataria = linhasJson(signataria.logs());
+        assertThat(eventosSignataria).anySatisfy(e -> {
+            assertThat(e.path("traceId").asString()).isEqualTo(trace);
+            assertThat(e.path("service").asString()).endsWith("signataria-api");
+            assertThat(e.path("resultado").asString()).isEqualTo("rejeitado");
+        });
+        assertThat(eventosSignataria).anySatisfy(e -> {
+            assertThat(e.path("traceId").asString()).isEqualTo(trace);
+            assertThat(e.path("operacao").asString()).isEqualTo("consultar_autorizacao");
+            assertThat(e.path("estadoAutorizacao").asString()).isEqualTo("ATIVA");
+        });
+        for (var titulo : ESCRITURADAS) {
+            // IDs das Duplicatas não entram nos logs: a correlação do worker é pelo processamento.
+            assertThat(signataria.logs()).doesNotContain(titulo.idDuplicata().toString());
+        }
+        var transicoes = eventosSignataria.stream().filter(e -> e.has("estado") && e.has("processamentoId")).toList();
+        assertThat(transicoes).isNotEmpty();
+        var concluida = transicoes.stream().filter(e -> e.path("estado").asString().equals("CONCLUIDO")).findFirst().orElseThrow();
+        String processamento = concluida.path("processamentoId").asString();
+        assertThat(transicoes).anySatisfy(e -> {
+            assertThat(e.path("processamentoId").asString()).isEqualTo(processamento);
+            assertThat(e.path("estado").asString()).isEqualTo("EM_PROCESSAMENTO");
+        });
+        var recebimento = eventosSignataria.stream().filter(e -> processamento.equals(e.path("processamentoId").asString())
+                && !e.has("estado")).findFirst().orElseThrow();
+        assertThat(concluida.path("traceId").asString()).isNotBlank().isNotEqualTo(recebimento.path("traceId").asString());
+        assertThat(concluida.path("spanId").asString()).matches("[0-9a-f]{16}");
+        assertThat(output.getAll() + signataria.logs() + otlp.spans.toString())
+                .doesNotContain(TOKEN_FINANCIADOR, TOKEN_SACADOR, "Authorization: Bearer", "Bearer " + TOKEN_INVALIDO);
+        verificarAusenciaDeCredenciais(output.getAll() + signataria.logs() + otlp.spans.toString());
+        assertThat(otlp.spans.toString()).doesNotContain(CNPJ, OUTRO_CNPJ, "Sacado fict", "Sacador fict");
+    }
+
+    private static String hexadecimal(com.google.protobuf.ByteString bytes) {
+        return java.util.HexFormat.of().formatHex(bytes.toByteArray());
+    }
+
+    private static List<tools.jackson.databind.JsonNode> linhasJson(String logs) {
+        return logs.lines().filter(l -> l.startsWith("{")).map(signataria.json::readTree).toList();
     }
 
     @Test
@@ -226,8 +364,13 @@ class FluxoConsultaAutorizadaVerticalTests {
         return new SpringApplicationBuilder(FinanciamentoApplication.class).web(WebApplicationType.NONE).profiles("local")
                 .initializers(ctx -> ctx.getEnvironment().getPropertySources().addFirst(new MapPropertySource("vertical",
                         Map.of("SIGNATARIA_URL_BASE", signataria.url, "SIGNATARIA_TOKEN", token,
-                                "SIGNATARIA_TIMEOUT_CONEXAO", "2s", "SIGNATARIA_TIMEOUT_LEITURA", "5s"))))
-                .properties("spring.main.banner-mode=off", "logging.level.root=ERROR").run();
+                                "SIGNATARIA_TIMEOUT_CONEXAO", "2s", "SIGNATARIA_TIMEOUT_LEITURA", "5s",
+                                "management.opentelemetry.tracing.export.otlp.endpoint", otlp.endpoint(),
+                                "management.opentelemetry.tracing.export.schedule-delay", "100ms",
+                                "management.tracing.sampling.probability", "1.0",
+                                "management.otlp.metrics.export.enabled", "false"))))
+                .properties("spring.main.banner-mode=off", "logging.level.root=ERROR",
+                        "logging.level.br.com.duplicataescritural.financiamento.consultarecebiveis.aplicacao=INFO").run();
     }
 
     private static AutorizacaoConsulta solicitar(String cnpj, String chave) {

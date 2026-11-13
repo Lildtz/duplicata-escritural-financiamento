@@ -194,6 +194,12 @@ Limitações deliberadas:
 * A V2 altera a constraint de estado. A aplicação da Entrega 1 deve ser encerrada
   antes de habilitar processadores da Entrega 2, pois seu enum conhece só PENDENTE.
 
+A Entrega 4.2 acrescenta uma Observation por execução reservada e logs/contadores
+de transições somente após commit. O ID técnico do processamento correlaciona
+recebimento e worker; o trace HTTP não é persistido nem continuado pelo agendador.
+Reservas, concorrência, backoff e transações T1/T2/T3 são preservados.
+Consulte [sinais e testes de rollback](observabilidade.md#processamento-assíncrono).
+
 Comandos de validação na raiz:
 
 ```powershell

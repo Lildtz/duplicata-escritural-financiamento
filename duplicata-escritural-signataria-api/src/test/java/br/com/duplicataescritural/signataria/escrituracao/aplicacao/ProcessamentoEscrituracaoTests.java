@@ -68,6 +68,8 @@ class ProcessamentoEscrituracaoTests {
     @Autowired ConfiguracaoProcessamento configuracao;
     @Autowired PlatformTransactionManager transactionManager;
     @Autowired ApplicationContext contexto;
+    @Autowired io.micrometer.core.instrument.MeterRegistry metricas;
+    @Autowired br.com.duplicataescritural.signataria.observabilidade.Observabilidade observabilidade;
     private Sacador sacador;
 
     @BeforeEach
@@ -80,6 +82,37 @@ class ProcessamentoEscrituracaoTests {
         sacadores.deleteAllInBatch();
         sacador = sacadores.saveAndFlush(ExemploEscrituracao.sacador());
         relogio.instante.set(Instant.parse("2030-01-01T00:00:00Z"));
+    }
+
+    @Test
+    void metricasELogsRepresentamSomenteTransicoesConfirmadasAposRollbackENovaTentativa(CapturedOutput output) {
+        double concluidas = transicoes("CONCLUIDO");
+        double iniciadas = transicoes("EM_PROCESSAMENTO");
+        double pendentes = transicoes("PENDENTE");
+        var pedido = receber("observabilidade-rollback", ExemploEscrituracao.dados());
+        falharConclusoes(1, "40001");
+        worker.processarProximo();
+        assertThat(buscar(pedido.id()).estado()).isEqualTo(PENDENTE);
+        assertThat(transicoes("CONCLUIDO")).isEqualTo(concluidas);
+        assertThat(transicoes("EM_PROCESSAMENTO")).isEqualTo(iniciadas + 1);
+        assertThat(transicoes("PENDENTE")).isEqualTo(pendentes + 1);
+        relogio.avancar(Duration.ofSeconds(5));
+        worker.processarProximo();
+        assertThat(transicoes("CONCLUIDO")).isEqualTo(concluidas + 1);
+        assertThat(transicoes("EM_PROCESSAMENTO")).isEqualTo(iniciadas + 2);
+        assertThat(metricas.find("signataria.escrituracao.transicoes").counters()).allSatisfy(c ->
+                assertThat(c.getId().getTags()).extracting(io.micrometer.core.instrument.Tag::getKey)
+                        .containsExactlyInAnyOrder("estado", "motivo"));
+        var json = tools.jackson.databind.json.JsonMapper.builder().build();
+        var eventos = output.getOut().lines().filter(l -> l.startsWith("{")).map(json::readTree)
+                .filter(e -> pedido.id().toString().equals(e.path("processamentoId").asString())).toList();
+        assertThat(eventos.stream().filter(e -> "CONCLUIDO".equals(e.path("estado").asString())).count()).isEqualTo(1);
+        assertThat(output.getAll()).doesNotContain("erro transitorio no commit", "valor-sensivel");
+    }
+
+    private double transicoes(String estado) {
+        return metricas.find("signataria.escrituracao.transicoes").tag("estado", estado).counters().stream()
+                .mapToDouble(io.micrometer.core.instrument.Counter::count).sum();
     }
 
     @Test
@@ -117,6 +150,7 @@ class ProcessamentoEscrituracaoTests {
     @ParameterizedTest
     @CsvSource({"DUP-1,FAT-OUTRA", "DUP-OUTRA,FAT-1"})
     void rejeitaCadaUnicidadeComercialDepoisDoRollback(String numero, String fatura, CapturedOutput output) {
+        double rejeitadas = transicoes("REJEITADO");
         receber("primeiro", ExemploEscrituracao.dados());
         worker.processarProximo();
         var repetido = receber("segundo", dados(numero, fatura));
@@ -124,6 +158,7 @@ class ProcessamentoEscrituracaoTests {
 
         var resultado = buscar(repetido.id());
         assertThat(resultado.estado()).isEqualTo(REJEITADO);
+        assertThat(transicoes("REJEITADO")).isEqualTo(rejeitadas + 1);
         assertThat(resultado.codigoResultado()).isEqualTo(CodigoResultado.DUPLICATA_JA_ESCRITURADA);
         assertThat(resultado.finalizadoEm()).isEqualTo(relogio.instant());
         assertThat(resultado.tentativas()).isEqualTo(1);
@@ -263,10 +298,12 @@ class ProcessamentoEscrituracaoTests {
 
     @Test
     void falhaNaoTransitoriaFinalizaSemRepetir(CapturedOutput output) {
+        double falhas = transicoes("FALHA_TECNICA");
         falharConclusoes(100, "23514");
         var pedido = receber("nao-transitoria", ExemploEscrituracao.dados());
         worker.processarProximo();
         assertThat(buscar(pedido.id()).estado()).isEqualTo(FALHA_TECNICA);
+        assertThat(transicoes("FALHA_TECNICA")).isEqualTo(falhas + 1);
         assertThat(buscar(pedido.id()).codigoResultado()).isEqualTo(CodigoResultado.ERRO_TECNICO);
         assertThat(buscar(pedido.id()).tentativas()).isEqualTo(1);
         assertThat(duplicatas.count()).isZero();
@@ -284,6 +321,15 @@ class ProcessamentoEscrituracaoTests {
         assertThat(output.getAll()).contains("ErrorCode: 0, SQLState: 08006", "Detalhes JDBC omitidos por segurança")
                 .doesNotContain("cnpj-sensivel", "valor-sensivel", "causa-sensivel", "conteudo-sensivel",
                         "java.lang.IllegalStateException");
+        var json = tools.jackson.databind.json.JsonMapper.builder().build();
+        var eventos = output.getOut().lines().filter(l -> l.startsWith("{")).map(json::readTree)
+                .filter(e -> "org.hibernate.orm.jdbc.error".equals(e.path("logger_name").asString())).toList();
+        assertThat(eventos).isNotEmpty().allSatisfy(e -> {
+            assertThat(e.path("service").asString()).isEqualTo("duplicata-escritural-signataria-api");
+            assertThat(e.has("@timestamp") && e.has("level") && e.has("message")).isTrue();
+        });
+        assertThat(eventos).extracting(e -> e.path("message").asString())
+                .contains("HHH000247: ErrorCode: 0, SQLState: 08006", "Detalhes JDBC omitidos por segurança");
     }
 
     @ParameterizedTest
@@ -304,7 +350,7 @@ class ProcessamentoEscrituracaoTests {
         var curta = new ConfiguracaoProcessamento(false, Duration.ofSeconds(1), 3, Duration.ofSeconds(5),
                 Duration.ofSeconds(30), Duration.ofSeconds(60), Duration.ofSeconds(1));
         var executorCurto = new ServicoProcessamentoEscrituracao(processamentos, duplicatas, sacadores,
-                relogio, curta, transactionManager);
+                relogio, curta, transactionManager, observabilidade);
         var bloqueado = new java.util.concurrent.CountDownLatch(1);
         var liberar = new java.util.concurrent.CountDownLatch(1);
         try (var executor = Executors.newFixedThreadPool(2)) {
@@ -367,7 +413,7 @@ class ProcessamentoEscrituracaoTests {
         var pedido = receber("reinicio", ExemploEscrituracao.dados());
         var original = worker.reservarProximo().orElseThrow();
         var reiniciado = new ServicoProcessamentoEscrituracao(processamentos, duplicatas, sacadores,
-                relogio, configuracao, transactionManager);
+                relogio, configuracao, transactionManager, observabilidade);
         relogio.avancar(Duration.ofSeconds(59));
         assertThat(reiniciado.reservarProximo()).isEmpty();
         relogio.avancar(Duration.ofSeconds(1));

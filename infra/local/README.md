@@ -108,3 +108,15 @@ Teste a documentação e o bloqueio sem perfil local, sem depender do Compose:
 
 Os testes requerem Docker e usam PostgreSQL/Testcontainers, portas dinâmicas e
 identidades aleatórias. Consulte [contratos, limites e evidências](../../docs/escrituracao-manual.md#openapi-3-e-swagger-ui--entrega-41).
+
+## Observabilidade (Entrega 4.2)
+
+Os mesmos comandos de inicialização produzem logs JSON com `service`, `traceId`
+e `spanId` quando há contexto. Procure o mesmo trace nas duas aplicações para
+acompanhar uma consulta. O worker usa `processamentoId`, sem continuidade do trace
+do recebimento. Não é necessário instalar um coletor.
+
+Na Signatária `local`, `/actuator/metrics` e `/actuator/metrics/{nome}` exigem Bearer
+de Sacador ou Financiador provisionado. O Banco DUP mantém apenas `health,info`
+expostos por HTTP. Sampling, exportação opcional de traces, nomes dos medidores e
+comandos de teste estão no [guia de observabilidade](../../docs/observabilidade.md).

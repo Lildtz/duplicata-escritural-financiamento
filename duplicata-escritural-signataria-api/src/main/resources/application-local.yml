@@ -4,3 +4,12 @@ springdoc:
   swagger-ui:
     enabled: true
     persist-authorization: false
+
+management:
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

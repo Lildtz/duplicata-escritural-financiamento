@@ -4,3 +4,8 @@ financiamento:
     token: ${SIGNATARIA_TOKEN:}
     timeout-conexao: ${SIGNATARIA_TIMEOUT_CONEXAO:2s}
     timeout-leitura: ${SIGNATARIA_TIMEOUT_LEITURA:5s}
+
+management:
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}

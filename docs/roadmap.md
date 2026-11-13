@@ -8,7 +8,7 @@ O progresso é registrado com base nas implementações conhecidas. Uma funciona
 
 ## Estado atual
 
-**Entrega 4.1 — OpenAPI e Swagger UI aprovada tecnicamente em 13/11/2026, com Code Review encerrado favoravelmente; versionamento pendente de autorização.** A 3.4 foi encerrada e versionada em `27e950e`, após aprovação técnica em 13/11/2026.
+**Entrega 4.2 — Observabilidade fundamental aprovada tecnicamente em 13/11/2026, com Code Review concluído favoravelmente; versionamento pendente de autorização explícita.** A 4.1 foi aprovada tecnicamente em 13/11/2026 e versionada isoladamente em `03290c8`. A 3.4 foi encerrada e versionada em `27e950e`, após aprovação técnica em 13/11/2026.
 
 | Entrega | Descrição                                 | Situação                          |
 | ------- | ----------------------------------------- | --------------------------------- |
@@ -19,8 +19,8 @@ O progresso é registrado com base nas implementações conhecidas. Uma funciona
 | 3.2     | Consulta local protegida de recebíveis    | Aprovação técnica retrospectiva em 13/11/2026 |
 | 3.3     | Integração HTTP do Banco DUP              | Aprovação técnica final em 13/11/2026; versionada em `04081ca` |
 | 3.4     | Validação vertical do fluxo               | Aprovação técnica final em 13/11/2026; versionada em `27e950e` |
-| 4.1     | OpenAPI e Swagger UI                      | Aprovada tecnicamente em 13/11/2026; versionamento pendente de autorização |
-| 4.2     | Observabilidade                          | Planejada |
+| 4.1     | OpenAPI e Swagger UI                      | Aprovada tecnicamente em 13/11/2026; versionada em `03290c8` |
+| 4.2     | Observabilidade                          | Aprovação técnica final em 13/11/2026; versionamento pendente de autorização explícita |
 | 4.3     | CI com GitHub Actions                     | Planejada |
 | 4.4     | Monitoramento                            | Planejada |
 | 4.5     | CD                                       | Planejada; estratégia de deploy a definir |
@@ -246,7 +246,7 @@ IUD ou interoperabilidade. Nenhuma próxima entrega foi iniciada.
 
 ## Entrega 4.1 — OpenAPI 3 e Swagger UI
 
-**Situação: implementada e validada por HTTP; aprovada tecnicamente em 13/11/2026, com Code Review encerrado favoravelmente. Versionamento pendente de autorização explícita.**
+**Situação: implementada e validada por HTTP; aprovada tecnicamente em 13/11/2026, com Code Review encerrado favoravelmente. Versionada em `03290c8` após autorização explícita.**
 
 - [x] Separar a 4.1 do commit de encerramento da 3.4.
 - [x] Adotar springdoc 3.2.0 somente na Signatária, compatível com Spring Boot 4.1.x.
@@ -274,7 +274,7 @@ A Signatária também iniciou como JAR em ambiente descartável; a inspeção vi
 foi interrompida pelo Computer Use por não conseguir determinar a URL atual do
 Chrome no Windows com confiança para aplicar sua política. Não se declara inspeção
 visual realizada. Processo e container descartáveis foram encerrados.
-Observabilidade/monitoramento e a próxima entrega permanecem futuros.
+Naquela entrega, observabilidade/monitoramento permaneciam futuros.
 
 Na verificação final dos contratos, os testes HTTP confirmaram 401 por Bearer
 ausente/inválido e 403 por papel inadequado com `application/problem+json;charset=UTF-8`;
@@ -285,17 +285,69 @@ componentes documentais. As asserções preservam os corpos distintos e o desafi
 o novo build completo passou em 2min04s, com 270 testes (100 do Financiamento e
 170 da Signatária), sem falhas, erros ou ignorados. A aprovação técnica foi registrada
 em 13/11/2026, preservando a limitação da inspeção visual não realizada e a evidência
-dos testes HTTP de Swagger UI aprovados. O pacote aguarda autorização explícita
-para criar o commit; nenhum versionamento da 4.1 ou push foi realizado nesta preparação.
+dos testes HTTP de Swagger UI aprovados. Após autorização explícita, o commit
+`03290c828f751f838407e314f6fe2e27da137091` encerrou a 4.1 isoladamente no histórico.
+
+## Entrega 4.2 — Observabilidade fundamental
+
+**Situação: implementada e validada; aprovação técnica final em 13/11/2026, com Code Review concluído favoravelmente. Versionamento pendente de autorização explícita.**
+
+- [x] Confirmar a 4.1 encerrada em commit independente e árvore limpa antes de iniciar.
+- [x] Adotar o starter OpenTelemetry gerenciado pelo Boot nas duas aplicações.
+- [x] Produzir JSON Logstash com serviço e contexto de trace/span, sem credenciais.
+- [x] Usar builder RestClient autoconfigurado, preservando Bearer, timeouts e semântica de falhas.
+- [x] Verificar W3C e a cadeia de spans entre JVMs por receptor OTLP efêmero de teste.
+- [x] Verificar métricas HTTP/JVM, operações com tags finitas e transições após commit.
+- [x] Comprovar worker real, rollback sem falsa conclusão e correlação por processamento.
+- [x] Expor métricas da Signatária somente em local com autenticação; demais endpoints sensíveis bloqueados.
+- [x] Não exigir backend de telemetria para inicialização ou testes.
+- [x] Concluir build completo e revisão final do diff.
+- [x] Aprovar os ajustes de robustez dos testes JDBC e Awaitility.
+- [x] Aprovar três execuções independentes do teste OTLP.
+- [x] Encerrar Code Review e registrar aprovação técnica final em 13/11/2026.
+- [ ] Versionar após autorização.
+
+A validação específica passou com 29 testes do Banco DUP e 44 da Signatária,
+sem falhas, erros ou ignorados. O novo caso vertical verifica `traceparent`, bit
+sampled, trace compartilhado, spans distintos e relações pai/filho, incluindo
+spans intermediários nativos do Spring Security. Os logs JSON são verificados
+com IDs de contexto, serviço e ausência dos tokens/hashes efêmeros. O teste real
+do worker não conta uma conclusão revertida e observa a nova tentativa confirmada.
+
+Os ensaios iniciais identificaram a necessidade do starter RestClient do Boot 4,
+do appender estruturado no Logback existente e de desabilitar exportação OTLP de
+métricas por padrão. Duas asserções de tracing foram ajustadas aos flags W3C
+válidos e aos spans intermediários efetivamente produzidos. Não foi necessário
+alterar regra de negócio, segurança de negócio, transação, migration ou ADR.
+Procedimentos, métricas, sampling/exportação e limites: [guia de observabilidade](observabilidade.md).
+
+A regressão HTTP e a suíte completa do Banco DUP passaram em 1min43s. Na validação
+inicial, `.\gradlew.bat clean build --console=plain` passou em 2min24s, com 277 testes:
+101 do Financiamento (dez verticais: nove anteriores e um de observabilidade) e
+176 da Signatária. Zero falhas, erros e ignorados. O build não exigiu coletor externo;
+os relatórios não contêm avisos de falha de exportação OTLP. `git diff --check`
+passou. O diff contém somente instrumentação, configuração, testes e documentação.
+
+A revisão final removeu a exigência de exatamente três eventos JDBC, preservando
+JSON válido, metadados, códigos/SQLState permitidos e substituição segura de mensagens.
+Também corrigiu a intermitência de chegada dos spans: as buscas por raiz e servidor
+agora verificam `Optional` por asserção antes do acesso, permitindo novas tentativas
+pelo Awaitility dentro dos mesmos 15s, sem `Thread.sleep` ou alteração do receptor.
+As três execuções independentes do teste OTLP, com `--rerun-tasks` e sem mudanças
+entre elas, passaram em 1min, 43s e 41s. A suíte vertical completa passou com dez
+testes em 1min03s. O último `clean build --console=plain` passou em 2min21s: 277
+testes (101 do Financiamento e 176 da Signatária), zero falhas, erros e ignorados.
+Essas correções e evidências foram aprovadas tecnicamente em 13/11/2026; o Code
+Review está encerrado favoravelmente. Apenas o versionamento aguarda autorização
+explícita. Nenhum backend externo de monitoramento foi validado.
+
+O processamento não persiste contexto de trace: a correlação com o recebimento
+usa o ID técnico. Não há novos spans SQL/JDBC, retry da integração, coletor
+obrigatório, dashboards ou monitoramento centralizado. AGENTS e ADRs preservados.
 
 ## Planejamento restante da Fase 4
 
 Sequência aprovada; as entregas abaixo permanecem planejadas e não foram iniciadas.
-
-### 4.2 — Observabilidade
-
-- Logs estruturados e correlação.
-- Métricas e tracing distribuído.
 
 ### 4.3 — CI com GitHub Actions
 
@@ -329,7 +381,7 @@ As próximas capacidades ainda não possuem numeração definitiva de entrega. S
 
 ### Resiliência e observabilidade
 
-- Métricas e rastreamento distribuído.
+- Expansão das métricas e do rastreamento fundamental da 4.2 quando houver novos casos de uso.
 - Políticas de retry quando justificadas.
 - Circuit breaker quando necessário.
 - Testes de degradação e indisponibilidade.

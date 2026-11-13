@@ -25,6 +25,8 @@ class ConfiguracaoSignatariaTests {
     private final String token = ContratoSignataria.token();
     private final ApplicationContextRunner contexto = new ApplicationContextRunner()
             .withUserConfiguration(ConfiguracaoSignataria.class)
+            .withBean(org.springframework.web.client.RestClient.Builder.class, org.springframework.web.client.RestClient::builder)
+            .withBean(io.micrometer.observation.ObservationRegistry.class, io.micrometer.observation.ObservationRegistry::create)
             .withInitializer(ctx -> ctx.getEnvironment().setActiveProfiles("local"))
             .withPropertyValues("financiamento.signataria.url-base=http://localhost:8081",
                     "financiamento.signataria.timeout-conexao=2s", "financiamento.signataria.timeout-leitura=5s");

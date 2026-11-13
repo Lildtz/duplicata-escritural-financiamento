@@ -53,8 +53,8 @@ final class SignatariaReal implements AutoCloseable {
         this.log = log;
     }
 
-    void iniciar(PostgreSQLContainer postgres) throws Exception {
-        var configuracao = Map.of(
+    void iniciar(PostgreSQLContainer postgres, String otlp) throws Exception {
+        var configuracao = new java.util.HashMap<String, Object>(Map.of(
                 "spring.profiles.active", "local",
                 "spring.datasource.url", postgres.getJdbcUrl(),
                 "spring.datasource.username", postgres.getUsername(),
@@ -68,7 +68,11 @@ final class SignatariaReal implements AutoCloseable {
                         Map.of("sha256", digest(TOKEN_OUTRO_SACADOR), "sacador-id", OUTRO_SACADOR),
                         Map.of("sha256", digest(TOKEN_SACADOR_SEM_TITULOS), "sacador-id", SACADOR_SEM_TITULOS),
                         Map.of("sha256", digest(TOKEN_FINANCIADOR), "financiador-id", FINANCIADOR),
-                        Map.of("sha256", digest(TOKEN_OUTRO_FINANCIADOR), "financiador-id", OUTRO_FINANCIADOR)));
+                        Map.of("sha256", digest(TOKEN_OUTRO_FINANCIADOR), "financiador-id", OUTRO_FINANCIADOR))));
+        configuracao.put("management.opentelemetry.tracing.export.otlp.endpoint", otlp);
+        configuracao.put("management.opentelemetry.tracing.export.schedule-delay", "100ms");
+        configuracao.put("management.tracing.sampling.probability", "1.0");
+        configuracao.put("management.otlp.metrics.export.enabled", "false");
         var builder = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
                 "-jar", System.getProperty("signataria.jar"), "--spring.main.banner-mode=off")
                 .redirectErrorStream(true).redirectOutput(log.toFile());
@@ -101,6 +105,10 @@ final class SignatariaReal implements AutoCloseable {
                 HttpResponse.BodyHandlers.ofString());
     }
 
+    String logs() throws Exception {
+        return Files.readString(log);
+    }
+
     private void cadastrar(PostgreSQLContainer postgres, UUID id, String cnpj) throws Exception {
         // Não há endpoint de cadastro. A fixture não insere autorizações, processamentos ou duplicatas.
         sql(postgres, "INSERT INTO escrituradora.sacador VALUES ('" + id + "','" + cnpj
@@ -126,8 +134,17 @@ final class SignatariaReal implements AutoCloseable {
         }
         if (Files.exists(log)) {
             String conteudo = Files.readString(log);
-            assertThat(TOKENS.stream().noneMatch(conteudo::contains)).as("Logs sem Bearers de teste").isTrue();
+            verificarAusenciaDeCredenciais(conteudo);
         }
+    }
+
+    static void verificarAusenciaDeCredenciais(String conteudo) {
+        assertThat(TOKENS.stream().noneMatch(t -> conteudo.contains(t) || conteudo.contains(digestSemErro(t))))
+                .as("Sinais sem Bearers ou hashes de teste").isTrue();
+    }
+
+    private static String digestSemErro(String token) {
+        try { return digest(token); } catch (Exception falha) { throw new IllegalStateException(falha); }
     }
 
     private static String token() {

@@ -1,5 +1,7 @@
 package br.com.duplicataescritural.financiamento.consultarecebiveis.infraestrutura.integracao.signataria;
 
+import org.springframework.web.client.RestClient;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -77,7 +79,7 @@ class SignatariaHttpTests {
                 exchange.close();
             }
         });
-        var gateway = new ConfiguracaoSignataria().gatewayRegistradora(conexao(Duration.ofMillis(200)));
+        var gateway = new ConfiguracaoSignataria().gatewayRegistradora(conexao(Duration.ofMillis(200)), RestClient.builder());
         try {
             assertTimeoutPreemptively(Duration.ofSeconds(5), () ->
                     assertThatThrownBy(() -> gateway.consultarAutorizacao(AUTORIZACAO))
@@ -94,7 +96,7 @@ class SignatariaHttpTests {
         int porta;
         try (var reserva = new ServerSocket(0)) { porta = reserva.getLocalPort(); }
         var conexao = new ConexaoSignataria(URI.create("http://127.0.0.1:" + porta), token, Duration.ofSeconds(1), Duration.ofSeconds(1));
-        var gateway = new ConfiguracaoSignataria().gatewayRegistradora(conexao);
+        var gateway = new ConfiguracaoSignataria().gatewayRegistradora(conexao, RestClient.builder());
         assertThatThrownBy(() -> gateway.consultarAutorizacao(AUTORIZACAO)).isInstanceOfSatisfying(FalhaRegistradora.class,
                 falha -> assertThat(falha.motivo()).isEqualTo(FalhaRegistradora.Motivo.INDISPONIVEL));
     }
@@ -114,7 +116,7 @@ class SignatariaHttpTests {
             exchange.close();
         });
         try {
-            var gateway = new ConfiguracaoSignataria().gatewayRegistradora(conexao(Duration.ofSeconds(2)));
+            var gateway = new ConfiguracaoSignataria().gatewayRegistradora(conexao(Duration.ofSeconds(2)), RestClient.builder());
             assertThatThrownBy(() -> gateway.consultarAutorizacao(AUTORIZACAO)).isInstanceOfSatisfying(FalhaRegistradora.class,
                     falha -> assertThat(falha.motivo()).isEqualTo(FalhaRegistradora.Motivo.RESPOSTA_INCOMPATIVEL));
             assertThat(chamadas.get()).isZero();

@@ -55,7 +55,7 @@ A presença de uma tecnologia nesta lista não significa que ela já esteja impl
 
 ## Estado do projeto
 
-**Fase de referência: Entrega 4.1 — OpenAPI e Swagger UI aprovada tecnicamente em 13/11/2026, com Code Review encerrado favoravelmente; versionamento pendente de autorização.** A validação da UI foi HTTP, sem inspeção visual efetiva. A 3.4 foi versionada em `27e950e`; a 3.3 permanece em `04081ca`.
+**Fase de referência: Entrega 4.2 — observabilidade fundamental aprovada tecnicamente em 13/11/2026, com Code Review concluído favoravelmente; versionamento pendente de autorização explícita.** A 4.1 foi aprovada tecnicamente em 13/11/2026 e versionada isoladamente em `03290c8`. A validação da UI foi HTTP, sem inspeção visual efetiva. A 3.4 foi versionada em `27e950e`; a 3.3 permanece em `04081ca`.
 
 As Entregas 1, 2, 3.1 e 3.2 estão implementadas. A 3.2 recebeu aprovação técnica retrospectiva em 13/11/2026, sem evidência de aceite histórico anterior, conforme o [roadmap](docs/roadmap.md). A 3.4 exercita o fluxo completo do simulador, preservando as fronteiras entre as aplicações.
 
@@ -118,6 +118,31 @@ O Wrapper gera o JAR da Signatária; o teste provisiona participantes, tokens al
 Na Signatária com perfil `local` e identidades provisionadas conforme o [guia local](infra/local/README.md), acesse `http://localhost:8081/swagger-ui.html` ou `http://localhost:8081/v3/api-docs`. A documentação é pública somente nesse perfil; os endpoints de negócio continuam exigindo Bearer opaco e os papéis corretos. Em **Authorize**, informe apenas um token fictício provisionado pelo operador, sem o prefixo `Bearer`.
 
 O JSON é gerado dos controllers/DTOs existentes, sem especificação estática versionada. O Banco DUP não recebe springdoc nem endpoints novos. Consulte [contratos, erros, segurança e testes da documentação](docs/escrituracao-manual.md#openapi-3-e-swagger-ui--entrega-41).
+
+## Observabilidade fundamental
+
+As duas aplicações produzem logs JSON Logstash com serviço e, quando há contexto,
+`traceId`/`spanId`. O Banco DUP usa o builder autoconfigurado do `RestClient` para
+propagar W3C até a Signatária. Observations medem operações e classificam falhas;
+transições do worker são registradas após commit e correlacionadas pelo ID do
+processamento, sem continuidade automática do trace através do banco/agendador.
+
+Em `local`, a Signatária disponibiliza `/actuator/metrics` somente com Bearer de
+participante provisionado. O Banco DUP mantém `health,info` por HTTP; seus testes
+usam `MeterRegistry`. Não é necessário instalar coletor: exportação OTLP de traces
+não tem endpoint padrão e envio de métricas OTLP está desabilitado. Sampling é
+configurável por `TRACING_SAMPLING_PROBABILITY` (local `1.0`, demais perfis `0.1`).
+
+Veja [métricas, segurança, configuração OTLP e testes de observabilidade](docs/observabilidade.md).
+A suíte vertical reutiliza a infraestrutura da 3.4 e um receptor OTLP efêmero para
+verificar os spans das duas JVMs. Monitoramento centralizado e dashboards continuam
+planejados para a 4.4.
+
+Validação final: 277 testes aprovados, incluindo dez verticais, sem falhas, erros
+ou ignorados. Três execuções independentes adicionais do teste OTLP passaram. Foram
+aprovados os ajustes de robustez do diagnóstico JDBC e da espera de spans no
+Awaitility. Nenhum backend externo de monitoramento foi validado. As entregas
+4.3, 4.4 e 4.5 permanecem planejadas e não iniciadas.
 
 ## Evolução do projeto
 O desenvolvimento segue entregas incrementais, priorizando funcionalidades verificáveis, testes automatizados e decisões arquiteturais justificadas.

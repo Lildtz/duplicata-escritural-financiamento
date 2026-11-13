@@ -48,7 +48,7 @@ class ErrosEscrituracaoTests {
     void classificaFalhasSemExporDetalhesInternos(RuntimeException falha, int esperado) throws Exception {
         var servico = mock(ServicoEscrituracao.class);
         when(servico.consultar(any(), any())).thenThrow(falha);
-        var mvc = MockMvcBuilders.standaloneSetup(new EscrituracaoController(servico))
+        var mvc = MockMvcBuilders.standaloneSetup(new EscrituracaoController(servico, mock(br.com.duplicataescritural.signataria.observabilidade.Observabilidade.class)))
                 .setControllerAdvice(new ErrosEscrituracao())
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver()).build();
         var principal = new SacadorAutenticado(ExemploEscrituracao.sacador().fotografia());

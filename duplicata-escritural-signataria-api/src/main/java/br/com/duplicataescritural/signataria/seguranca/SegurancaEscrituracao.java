@@ -42,6 +42,8 @@ public class SegurancaEscrituracao {
                     if (local) {
                         requests.requestMatchers(HttpMethod.GET, "/v3/api-docs", "/v3/api-docs/swagger-config",
                                 "/swagger-ui.html", "/swagger-ui/**").permitAll();
+                        requests.requestMatchers(HttpMethod.GET, "/actuator/metrics", "/actuator/metrics/*")
+                                .hasAnyAuthority("SACADOR_LOCAL", "FINANCIADOR_LOCAL");
                         requests.requestMatchers("/api/v1/escrituracoes/**").hasAuthority("SACADOR_LOCAL");
                         requests.requestMatchers(HttpMethod.POST, "/api/v1/autorizacoes-consulta").hasAuthority("FINANCIADOR_LOCAL")
                                 .requestMatchers(HttpMethod.GET, "/api/v1/autorizacoes-consulta/*/duplicatas").hasAuthority("FINANCIADOR_LOCAL")
@@ -64,6 +66,8 @@ public class SegurancaEscrituracao {
     }
 
     static void erro(HttpServletResponse response, int status) throws IOException {
+        org.slf4j.LoggerFactory.getLogger(SegurancaEscrituracao.class).atInfo()
+                .addKeyValue("status", status).log("Requisição rejeitada na fronteira de segurança");
         response.setStatus(status);
         response.setContentType("application/problem+json");
         if (status == 401) {

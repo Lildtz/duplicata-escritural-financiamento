@@ -60,8 +60,8 @@ public class GatewayRegistradoraHttp implements GatewayRegistradora {
     public PaginaDuplicatas consultarDuplicatas(UUID idAutorizacao, PaginacaoConsulta paginacao) {
         Objects.requireNonNull(idAutorizacao);
         Objects.requireNonNull(paginacao);
-        return executar(client.get().uri(builder -> builder.path(AUTORIZACOES + "/{id}/duplicatas")
-                .queryParam("pagina", paginacao.pagina()).queryParam("tamanho", paginacao.tamanho()).build(idAutorizacao)),
+        return executar(client.get().uri(AUTORIZACOES + "/{id}/duplicatas?pagina={pagina}&tamanho={tamanho}",
+                idAutorizacao, paginacao.pagina(), paginacao.tamanho()),
                 200, RespostaDuplicatas.class, resposta -> {
                     var pagina = resposta.modelo();
                     exigirResposta(pagina.pagina() == paginacao.pagina() && pagina.tamanho() == paginacao.tamanho());

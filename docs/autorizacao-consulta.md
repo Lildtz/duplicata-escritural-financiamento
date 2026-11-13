@@ -609,3 +609,13 @@ Nenhum defeito funcional das entregas anteriores foi identificado nesta validaç
 AGENTS e ADRs continuam coerentes e não foram alterados. A aprovação técnica final
 da 3.4 foi registrada em 13/11/2026; após autorização explícita, os sete arquivos
 foram versionados em `27e950e`, sem mudanças da 4.1 nesse commit e sem push.
+
+## Observabilidade da integração — Entrega 4.2
+
+A configuração agora recebe o `RestClient.Builder` autoconfigurado pelo Boot,
+preservando URL, Bearer, timeouts e redirects desabilitados. As três operações do
+Banco DUP possuem Observations com resultados/classificações finitos e propagam
+W3C para a Signatária. O teste vertical adicional recebe spans OTLP das duas JVMs
+em uma fixture temporária, sem coletor externo obrigatório. Contratos, paginação,
+idempotência e revalidação por página permanecem inalterados; não há novo retry.
+Consulte [diagnóstico, métricas e limites](observabilidade.md).

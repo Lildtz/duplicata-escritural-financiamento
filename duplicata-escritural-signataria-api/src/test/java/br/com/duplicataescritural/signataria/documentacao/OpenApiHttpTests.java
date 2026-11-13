@@ -59,6 +59,19 @@ class OpenApiHttpTests {
     }
 
     @Test
+    void metricasLocaisExigemBearerEEndpointsSensiveisContinuamBloqueados() throws Exception {
+        assertThat(enviar("/actuator/metrics", null, "GET").statusCode()).isEqualTo(401);
+        assertThat(enviar("/actuator/metrics", token(), "GET").statusCode()).isEqualTo(401);
+        var lista = enviar("/actuator/metrics", TOKEN_FINANCIADOR, "GET");
+        assertThat(lista.statusCode()).isEqualTo(200);
+        assertThat(textos(json.readTree(lista.body()).get("names"))).contains("jvm.memory.used");
+        assertThat(enviar("/actuator/metrics/jvm.memory.used", TOKEN_FINANCIADOR, "GET").statusCode()).isEqualTo(200);
+        for (String caminho : List.of("env", "beans", "configprops", "heapdump", "loggers")) {
+            assertThat(enviar("/actuator/" + caminho, TOKEN_FINANCIADOR, "GET").statusCode()).isEqualTo(401);
+        }
+    }
+
+    @Test
     void geraMetadadosSeteOperacoesEBearerOpacoSemActuatorOuParametrosInternos() throws Exception {
         var doc = documento();
         assertThat(doc.get("openapi").asString()).startsWith("3.0.");

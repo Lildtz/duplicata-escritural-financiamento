@@ -1,5 +1,7 @@
 # Plataforma de Financiamento de Duplicatas Escriturais
 
+[![CI](https://github.com/Lildtz/duplicata-escritural-financiamento/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Lildtz/duplicata-escritural-financiamento/actions/workflows/ci.yml?query=branch%3Amain)
+
 Plataforma experimental para explorar o financiamento de Duplicatas Escriturais no contexto do sistema financeiro brasileiro, sob a perspectiva de um **Agente Financiador**.
 
 O projeto utiliza Java e Spring Boot para explorar sistemas transacionais e integração distribuída. Spring AI e as capacidades de inteligência artificial permanecem planejadas.
@@ -55,7 +57,7 @@ A presença de uma tecnologia nesta lista não significa que ela já esteja impl
 
 ## Estado do projeto
 
-**Fase de referência: Entrega 4.3 — CI e GitHub Flow implementados e validados localmente, com Code Review, aceite e execução no GitHub pendentes.** A 4.2 foi aprovada tecnicamente em 13/11/2026 e versionada em `54357e8`. A 4.1 permanece em `03290c8`, com validação HTTP da UI e sem inspeção visual efetiva; a 3.4 foi versionada em `27e950e` e a 3.3 em `04081ca`.
+**Fase de referência: Entrega 4.3 — aprovada técnica e operacionalmente em 13/11/2026, integrada à `main` em `482b7f5`, com CI pós-merge aprovado.** A 4.2 foi aprovada tecnicamente em 13/11/2026 e versionada em `54357e8`. A 4.1 permanece em `03290c8`, com validação HTTP da UI e sem inspeção visual efetiva; a 3.4 foi versionada em `27e950e` e a 3.3 em `04081ca`.
 
 As Entregas 1, 2, 3.1 e 3.2 estão implementadas. A 3.2 recebeu aprovação técnica retrospectiva em 13/11/2026, sem evidência de aceite histórico anterior, conforme o [roadmap](docs/roadmap.md). A 3.4 exercita o fluxo completo do simulador, preservando as fronteiras entre as aplicações.
 
@@ -146,18 +148,28 @@ Awaitility. Nenhum backend externo de monitoramento foi validado. As entregas
 
 ## Integração contínua e contribuições
 
-O workflow [CI](.github/workflows/ci.yml) foi preparado para PRs direcionados à
+O workflow [CI](.github/workflows/ci.yml) executa em PRs direcionados à
 `main`, pushes em `main` e execução manual. O job **Build e testes** usa Ubuntu
 24.04, Temurin 21 e o Gradle Wrapper, executando a suíte completa com Docker e
 Testcontainers, sem excluir os testes verticais ou exigir coletor externo.
 Relatórios XML/HTML são preservados como artefatos mesmo após falha do build,
 quando disponíveis, e os totais JUnit são apresentados no resumo da execução.
 
-O [guia de contribuição](CONTRIBUTING.md) define feature branches por entrega,
-PR para `main`, CI, Code Review e aceite técnico antes do merge. O status check
-será obrigatório quando a proteção da branch for configurada. Publicação,
-primeiro PR e validação real em Linux/GitHub ainda dependem de autorização;
-nenhuma execução remota ou badge de sucesso é declarada nesta preparação.
+O GitHub Flow foi adotado conforme o [guia de contribuição](CONTRIBUTING.md):
+feature branches por entrega, PR para `main`, CI, Code Review e aceite técnico
+antes do merge. O [ruleset `27240150`](https://github.com/Lildtz/duplicata-escritural-financiamento/rules/27240150)
+está ativo na `main`, exigindo PR, check **Build e testes** do GitHub Actions e
+branch atualizada, com zero aprovações obrigatórias, sem bypass e com force push
+e exclusão bloqueados.
+
+O [PR #1](https://github.com/Lildtz/duplicata-escritural-financiamento/pull/1)
+foi integrado por squash em `482b7f5`. O [CI pós-merge na `main`](https://github.com/Lildtz/duplicata-escritural-financiamento/actions/runs/43530852930)
+aprovou 277 testes (101 do Financiamento e 176 da Signatária), incluindo os dez
+verticais, sem falhas, erros ou ignorados. Os [relatórios JUnit e HTML](https://github.com/Lildtz/duplicata-escritural-financiamento/actions/runs/43530852930/artifacts/14087297417)
+foram publicados na execução, com retenção de sete dias.
+
+Foi validada uma execução pós-merge; a estabilidade futura será acompanhada pelas
+execuções recorrentes do CI. As entregas 4.4 e 4.5 permanecem planejadas e não iniciadas.
 
 ## Evolução do projeto
 O desenvolvimento segue entregas incrementais, priorizando funcionalidades verificáveis, testes automatizados e decisões arquiteturais justificadas.

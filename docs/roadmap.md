@@ -8,7 +8,7 @@ O progresso é registrado com base nas implementações conhecidas. Uma funciona
 
 ## Estado atual
 
-**Entrega 4.3 — CI e GitHub Flow implementados e validados localmente; Code Review, aceite técnico e execução remota pendentes.** A 4.2 foi aprovada tecnicamente em 13/11/2026 e versionada em `54357e8`. A 4.1 permanece versionada em `03290c8` e a 3.4 em `27e950e`.
+**Entrega 4.3 — aprovada técnica e operacionalmente em 13/11/2026; PR #1 integrado em `482b7f5`, com CI pós-merge aprovado e proteção da `main` ativa.** A 4.2 foi aprovada tecnicamente em 13/11/2026 e versionada em `54357e8`. A 4.1 permanece versionada em `03290c8` e a 3.4 em `27e950e`.
 
 | Entrega | Descrição                                 | Situação                          |
 | ------- | ----------------------------------------- | --------------------------------- |
@@ -21,7 +21,7 @@ O progresso é registrado com base nas implementações conhecidas. Uma funciona
 | 3.4     | Validação vertical do fluxo               | Aprovação técnica final em 13/11/2026; versionada em `27e950e` |
 | 4.1     | OpenAPI e Swagger UI                      | Aprovada tecnicamente em 13/11/2026; versionada em `03290c8` |
 | 4.2     | Observabilidade                          | Aprovação técnica final em 13/11/2026; versionada em `54357e8` |
-| 4.3     | CI com GitHub Actions                     | Implementada e validada localmente; Code Review, aceite e execução remota pendentes |
+| 4.3     | CI com GitHub Actions                     | Aprovada técnica e operacionalmente em 13/11/2026; integrada em `482b7f5` |
 | 4.4     | Monitoramento                            | Planejada |
 | 4.5     | CD                                       | Planejada; estratégia de deploy a definir |
 
@@ -348,7 +348,7 @@ obrigatório, dashboards ou monitoramento centralizado. AGENTS e ADRs preservado
 
 ## Entrega 4.3 — CI com GitHub Actions e GitHub Flow
 
-**Situação: implementada e validada localmente. Code Review, aceite técnico e comprovação remota pendentes.**
+**Situação: aprovada técnica e operacionalmente em 13/11/2026. Code Review encerrado, PR #1 integrado e CI pós-merge aprovado. GitHub Flow adotado.**
 
 - [x] Confirmar a feature branch `feat/4.3-github-actions`, base `54357e8` e árvore inicialmente limpa.
 - [x] Criar um workflow com PRs para `main`, pushes em `main` e execução manual.
@@ -360,10 +360,11 @@ obrigatório, dashboards ou monitoramento centralizado. AGENTS e ADRs preservado
 - [x] Restringir permissões a `contents: read`, sem credenciais persistidas, deploy ou publicação de releases.
 - [x] Documentar GitHub Flow em `CONTRIBUTING.md`, sem branches permanentes adicionais.
 - [x] Concluir validações locais, build completo e revisão do diff.
-- [ ] Obter Code Review e aceite técnico.
-- [ ] Versionar e publicar a branch após autorização explícita.
-- [ ] Abrir o primeiro PR e comprovar a execução real no GitHub/Linux.
-- [ ] Configurar o status check obrigatório nas regras de `main`, após comprovação.
+- [x] Obter Code Review e aceite técnico.
+- [x] Versionar e publicar a branch após autorização explícita.
+- [x] Abrir o primeiro PR e comprovar a execução real no GitHub/Linux.
+- [x] Configurar o status check obrigatório nas regras de `main`, após comprovação.
+- [x] Integrar o PR #1 por squash e validar o CI disparado na `main`.
 
 O workflow usa actions estáveis fixadas por SHA: checkout 7.0.1, setup-java 6.2.0,
 setup-gradle 6.4.1 e upload-artifact 7.0.2. O build é
@@ -374,12 +375,32 @@ Os artefatos incluem somente XMLs JUnit e relatórios HTML, com retenção de se
 
 O cache básico aberto evita o provedor comercial opcional do setup-gradle 6.
 Fixar SHAs exige atualização manual das actions e conferência das releases oficiais.
-Não há badge, publicação remota ou proteção de branch configurada nesta preparação.
-A execução em Windows e a análise de configuração não comprovam execução Linux.
-O Ubuntu/WSL local está sem Java; a suíte completa no runner, as portas dinâmicas,
-as duas JVMs, exportação OTLP, limpeza e upload ainda precisam de execução real no GitHub.
 
-Validação em 13/11/2026: YAML analisado com SnakeYAML 2.6 já disponível no cache
+O [PR #1](https://github.com/Lildtz/duplicata-escritural-financiamento/pull/1),
+com o commit revisado `358fbd5`, foi integrado por Squash and merge no commit
+[`482b7f5`](https://github.com/Lildtz/duplicata-escritural-financiamento/commit/482b7f5bb8d64a0a484717a64c5a9940c998ea3c).
+A árvore integrada corresponde integralmente ao pacote aprovado de seis arquivos.
+O [CI do PR](https://github.com/Lildtz/duplicata-escritural-financiamento/actions/runs/43526626461)
+e o [CI pós-merge da `main`](https://github.com/Lildtz/duplicata-escritural-financiamento/actions/runs/43530852930)
+foram aprovados em Ubuntu 24.04, com Java 21, Gradle Wrapper e Docker.
+
+Na execução pós-merge, os XMLs JUnit confirmaram 277/277 testes aprovados:
+101 do Financiamento e 176 da Signatária, incluindo dez testes verticais com
+PostgreSQL 18/Testcontainers, HTTP real entre JVMs e W3C/OTLP; zero falhas,
+erros ou ignorados. O build completo passou em 2min37s. O artefato
+[`relatorios-testes`](https://github.com/Lildtz/duplicata-escritural-financiamento/actions/runs/43530852930/artifacts/14087297417)
+foi publicado com 22 XMLs JUnit e relatórios HTML dos dois subprojetos.
+
+O [ruleset `27240150`](https://github.com/Lildtz/duplicata-escritural-financiamento/rules/27240150)
+está ativo exclusivamente na `main`: exige PR, zero aprovações obrigatórias,
+check **Build e testes** originado no GitHub Actions e branch atualizada;
+bloqueia force push e exclusão, sem bypass. O README inclui o badge oficial
+do workflow para `main`.
+
+Limitação: uma execução pós-merge validada; a estabilidade futura será acompanhada
+pelas execuções recorrentes do CI. As entregas 4.4 e 4.5 permanecem planejadas e não iniciadas.
+
+Validação local em 13/11/2026: YAML analisado com SnakeYAML 2.6 já disponível no cache
 Gradle, com asserções de eventos, job, SHAs, permissões, cache, Wrapper e caminhos
 de relatórios. Não havia actionlint instalado; isso não equivale à validação do
 interpretador de expressões/runner do GitHub. O resumo Python foi exercitado com
@@ -387,8 +408,8 @@ ausência de XMLs e com totais de falhas, erros e ignorados. O build local Windo
 `.\gradlew.bat clean build --console=plain` passou em 2min58s: 277 testes (101 do
 Financiamento e 176 da Signatária), incluindo os dez verticais, sem falhas, erros
 ou ignorados. O conteúdo do Wrapper foi preservado; somente seu modo Git mudou
-de 100644 para 100755. `git diff --check` passou. Não houve commit, push ou PR
-da 4.3 nesta preparação; a comprovação remota permanece pendente.
+de 100644 para 100755. `git diff --check` passou. Naquela preparação local ainda
+não havia commit, push ou PR; o encerramento remoto posterior está registrado acima.
 
 ## Planejamento restante da Fase 4
 

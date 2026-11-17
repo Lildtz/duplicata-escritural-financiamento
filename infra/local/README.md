@@ -123,8 +123,8 @@ comandos de teste estão no [guia de observabilidade](../../docs/observabilidade
 
 ## Prometheus — exposição local (4.4.1 aprovada em Code Review)
 
-A 4.4.1 está aprovada tecnicamente na feature branch `feat/4.4-monitoramento`,
-ainda não integrada à `main`. A Entrega 4.4 permanece incompleta.
+A 4.4.1 está aprovada tecnicamente e versionada em `a2dde54` na feature branch
+`feat/4.4-monitoramento`, ainda não integrada à `main`. A Entrega 4.4 permanece incompleta.
 
 O perfil adicional `monitoramento` mantém as portas 8080/8081, força bind em
 `127.0.0.1` e acrescenta somente `GET /actuator/prometheus`, com Basic operacional
@@ -133,5 +133,152 @@ credenciais privadas de cada aplicação conforme o
 [guia de observabilidade](../../docs/observabilidade.md#exposição-prometheus-local--entrega-441).
 O perfil `local` isolado continua funcionando sem essas credenciais.
 
-O Compose existente permanece somente com PostgreSQL. Coleta pelo Docker Desktop,
-Prometheus e Grafana pertencem à 4.4.2/4.4.3 e ainda não foram implementados.
+O Compose existente permanece somente com PostgreSQL. O Compose complementar
+abaixo acrescenta a coleta da 4.4.2, aprovada tecnicamente em Code Review na
+feature branch, ainda não integrada à `main`; Grafana pertence à 4.4.3 planejada.
+
+## Coleta Prometheus — Entrega 4.4.2
+
+**Aprovada tecnicamente em Code Review na feature branch, ainda não integrada à `main`.**
+Requer Docker Desktop em Linux
+containers, Engine disponível e as duas aplicações executadas no Windows com
+`local,monitoramento`. O arquivo `docker-compose.monitoramento.yml` é um projeto
+Compose separado (`duplicata-monitoramento`): não combine seus arquivos com `-f`
+nem use seus comandos para administrar o PostgreSQL.
+
+### Verificar o acesso antes de iniciar a coleta
+
+```powershell
+docker context show
+docker info --format '{{.OSType}}'
+docker version
+Get-NetTCPConnection -State Listen -LocalPort 8080,8081 | Select-Object LocalAddress,LocalPort
+```
+
+O modo deve ser `linux`; os dois listeners devem ser `127.0.0.1`. Provisione
+PostgreSQL, participantes Bearer, usuário/hash operacional e inicie as duas
+aplicações conforme os guias anteriores. Valide pelo Windows HTTP 401 sem Basic
+e 200 com a credencial própria de cada aplicação, com conteúdo Prometheus válido.
+Não envie credenciais na primeira sonda do container:
+
+```powershell
+foreach ($porta in 8080,8081) {
+  "GET /actuator/prometheus HTTP/1.1`r`nHost: host.docker.internal:$porta`r`nConnection: close`r`n`r`n" |
+    docker run --rm -i --read-only --cap-drop ALL --security-opt no-new-privileges --user 65534:65534 --entrypoint /bin/busybox postgres:18-alpine nc -w 5 host.docker.internal $porta
+}
+```
+
+Esse cliente TCP descartável não usa proxy nem recebe segredos. Cada resposta
+deve ser HTTP 401 com `WWW-Authenticate: Basic realm="metricas"`. Confira também
+DNS (`busybox nslookup host.docker.internal`), o corpo/caminho e a chegada da
+requisição à JVM correta (contador HTTP 401 ou logs privados). `localhost` no
+container não é o Windows. Em falha, investigue DNS, TCP, proxy e Docker Desktop;
+interrompa a coleta para revisão arquitetural se não houver acesso seguro.
+Não amplie o bind, abra firewall, crie proxy na LAN ou desative autenticação.
+
+### Provisionar arquivos privados
+
+O Prometheus precisa da **senha original**, correspondente ao BCrypt externo da
+aplicação. Gere pares independentes pelo procedimento da
+[4.4.1](../../docs/observabilidade.md#geração-de-credenciais-locais).
+Os quatro arquivos abaixo não têm exemplos funcionais nem valores padrão.
+Confira a exclusão do Git **antes de criá-los**:
+
+```powershell
+git check-ignore infra/local/.env.monitoramento/financiamento.usuario infra/local/.env.monitoramento/financiamento.senha infra/local/.env.monitoramento/signataria.usuario infra/local/.env.monitoramento/signataria.senha
+```
+
+Os quatro caminhos devem aparecer na saída (regra existente `.env.*`). Pare se
+algum não estiver ignorado. Em sessão PowerShell privada, sem transcrição:
+
+```powershell
+$pastaMetricas = Join-Path (Get-Location) 'infra/local/.env.monitoramento'
+$destinosMetricas = @(
+  $pastaMetricas
+  (Join-Path $pastaMetricas 'financiamento.usuario')
+  (Join-Path $pastaMetricas 'financiamento.senha')
+  (Join-Path $pastaMetricas 'signataria.usuario')
+  (Join-Path $pastaMetricas 'signataria.senha')
+)
+foreach ($destino in $destinosMetricas) {
+  if (Test-Path -LiteralPath $destino -ErrorAction Stop) {
+    throw 'Provisionamento inicial abortado: pasta ou arquivo privado ja existe. Use o procedimento de rotacao deliberada.'
+  }
+}
+New-Item -ItemType Directory -Path $pastaMetricas -ErrorAction Stop | Out-Null
+$identidadeLocal = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+icacls $pastaMetricas /inheritance:r /grant:r ($identidadeLocal + ':(OI)(CI)F') 'SYSTEM:(OI)(CI)F' | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Nao foi possivel restringir a pasta privada' }
+foreach ($aplicacao in 'financiamento','signataria') {
+  $credencialMetricas = Get-Credential -Message "Credencial operacional de $aplicacao"
+  [IO.File]::WriteAllText((Join-Path $pastaMetricas "$aplicacao.usuario"), $credencialMetricas.UserName, [Text.UTF8Encoding]::new($false))
+  [IO.File]::WriteAllText((Join-Path $pastaMetricas "$aplicacao.senha"), $credencialMetricas.GetNetworkCredential().Password, [Text.UTF8Encoding]::new($false))
+}
+Remove-Variable credencialMetricas
+```
+
+O provisionamento inicial aborta antes de criar ou gravar qualquer destino se
+a pasta privada ou algum dos quatro arquivos já existir. Não remova essa guarda
+para reutilizar o exemplo como rotação.
+
+**Rotação deliberada:** planeje separadamente a atualização da senha do job e do
+hash BCrypt externo da respectiva aplicação, preservando ACL e acesso somente
+leitura no container. Reinicie a aplicação com o novo hash, confirme o retorno
+do target a `UP` e mantenha a outra credencial independente. Não execute o
+procedimento inicial sobre um provisionamento existente.
+
+Não use `Get-Content`, `cat` ou inspeção de
+ambiente para publicar esses arquivos. Não coloque senhas em comandos, URLs,
+logs compartilhados, commits ou relatórios. Esses secrets Compose são arquivos
+locais em texto claro, montados somente para leitura; não são um cofre criptografado.
+
+### Validar, iniciar e consultar
+
+```powershell
+docker compose -f infra/local/docker-compose.monitoramento.yml config --quiet
+docker compose -f infra/local/docker-compose.monitoramento.yml run --rm --no-deps --entrypoint /bin/promtool prometheus check config /etc/prometheus/prometheus.yml
+docker compose -f infra/local/docker-compose.monitoramento.yml up -d
+curl.exe --noproxy '*' --fail http://127.0.0.1:9090/-/ready
+curl.exe --noproxy '*' --fail http://127.0.0.1:9090/api/v1/targets
+curl.exe --noproxy '*' --fail --get --data-urlencode 'query=up' http://127.0.0.1:9090/api/v1/query
+```
+
+Use `http://127.0.0.1:9090/targets` ou a API: `banco-dup` e `signataria` devem
+ter `health=up`, `lastError` vazio e `up=1`. Aguarde até dois intervalos de coleta
+após inicialização/recuperação. Não exponha a UI/API do Prometheus à LAN: ela não
+possui autenticação neste ambiente local.
+
+| Configuração | Valor |
+|---|---|
+| Imagem oficial fixa | `prom/prometheus:v3.13.5` |
+| Processo | UID/GID `65534:65534`, sem privilégios/capabilities adicionais |
+| Publicação no Windows | `127.0.0.1:9090:9090` |
+| Rede | Bridge própria `duplicata-monitoramento_monitoramento` |
+| Volume de séries | `duplicata-monitoramento_prometheus-data` → `/prometheus` |
+| Configuração somente leitura | `infra/local/prometheus/prometheus.yml` → `/etc/prometheus/prometheus.yml` |
+| Coleta / timeout | 15s / 5s |
+| Jobs / targets | `banco-dup` → `host.docker.internal:8080`; `signataria` → `host.docker.internal:8081` |
+| Caminho | `/actuator/prometheus`, sem seguir redirecionamentos |
+| Basic por job | `username_file` e `password_file` próprios em `/run/secrets/` |
+| Labels estáticos | `aplicacao` e `ambiente=local`, além de `job`/`instance` |
+
+O processo não precisa de root para ler os arquivos; `promtool` deve passar
+executado pelo próprio serviço. No Windows, a projeção de permissões de bind
+mounts é do Docker Desktop; valide novamente ao trocar de ambiente. O servidor
+Prometheus escuta na rede interna do container; somente a publicação no host é
+loopback. Isso não torna a rede Docker uma fronteira contra administradores do host.
+
+Para parar temporariamente ou remover somente o container/rede de monitoramento:
+
+```powershell
+docker compose -f infra/local/docker-compose.monitoramento.yml stop prometheus
+docker compose -f infra/local/docker-compose.monitoramento.yml start prometheus
+# Alternativa: remove container/rede, preservando as series no volume
+docker compose -f infra/local/docker-compose.monitoramento.yml down
+```
+
+Não use `down -v`: isso apaga o histórico de séries. O PostgreSQL e seu volume
+não são alterados por esses comandos. Encerre as aplicações em seus terminais
+separadamente. O build e os dez testes verticais não dependem deste Compose nem
+de arquivos de credenciais operacionais. Consulte
+[métricas, testes negativos e limitações](../../docs/observabilidade.md#coleta-prometheus--entrega-442).

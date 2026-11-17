@@ -10,9 +10,10 @@ O progresso é registrado com base nas implementações conhecidas. Uma funciona
 
 **Entrega 4.3 — aprovada técnica e operacionalmente em 13/11/2026; PR #1 integrado em `482b7f5`, com CI pós-merge aprovado e proteção da `main` ativa.** A 4.2 foi aprovada tecnicamente em 13/11/2026 e versionada em `54357e8`. A 4.1 permanece versionada em `03290c8` e a 3.4 em `27e950e`.
 
-A **4.4.1 está aprovada tecnicamente e em Code Review na feature branch
+A **4.4.1 está aprovada e versionada em `a2dde54` na feature branch
 `feat/4.4-monitoramento`, ainda não integrada à `main`**. A 4.4 não está
-concluída; seus incrementos 4.4.2 e 4.4.3 permanecem planejados.
+concluída; a 4.4.2 está aprovada tecnicamente em Code Review na mesma branch,
+ainda não integrada à `main`, e a 4.4.3 permanece planejada.
 
 | Entrega | Descrição                                 | Situação                          |
 | ------- | ----------------------------------------- | --------------------------------- |
@@ -26,7 +27,7 @@ concluída; seus incrementos 4.4.2 e 4.4.3 permanecem planejados.
 | 4.1     | OpenAPI e Swagger UI                      | Aprovada tecnicamente em 13/11/2026; versionada em `03290c8` |
 | 4.2     | Observabilidade                          | Aprovação técnica final em 13/11/2026; versionada em `54357e8` |
 | 4.3     | CI com GitHub Actions                     | Aprovada técnica e operacionalmente em 13/11/2026; integrada em `482b7f5` |
-| 4.4     | Monitoramento                            | 4.4.1 aprovada tecnicamente na feature branch, não integrada à `main`; 4.4.2 e 4.4.3 planejadas |
+| 4.4     | Monitoramento                            | 4.4.1 aprovada e versionada na feature branch; 4.4.2 aprovada em Code Review; 4.4.3 planejada; não integrada à `main` |
 | 4.5     | CD                                       | Planejada; estratégia de deploy a definir |
 
 ---
@@ -402,7 +403,8 @@ bloqueia force push e exclusão, sem bypass. O README inclui o badge oficial
 do workflow para `main`.
 
 Limitação: uma execução pós-merge validada; a estabilidade futura será acompanhada
-pelas execuções recorrentes do CI. As entregas 4.4 e 4.5 permanecem planejadas e não iniciadas.
+pelas execuções recorrentes do CI. Naquele encerramento, as entregas 4.4 e 4.5
+permaneciam planejadas e não iniciadas.
 
 Validação local em 13/11/2026: YAML analisado com SnakeYAML 2.6 já disponível no cache
 Gradle, com asserções de eventos, job, SHAs, permissões, cache, Wrapper e caminhos
@@ -417,18 +419,20 @@ não havia commit, push ou PR; o encerramento remoto posterior está registrado 
 
 ## Planejamento restante da Fase 4
 
-Sequência aprovada; a 4.4.1 está aprovada tecnicamente e em Code Review na feature
-branch, ainda não integrada à `main`. A Entrega 4.4 permanece incompleta.
+Sequência aprovada; a 4.4.1 está aprovada tecnicamente e em Code Review e versionada
+em `a2dde54` na feature branch, ainda não integrada à `main`. A Entrega 4.4 permanece incompleta.
 
 ### 4.4 — Monitoramento
 
-- **4.4.1 — Exposição segura de métricas: aprovada tecnicamente e em Code Review na feature branch, não integrada à `main`.** Registry Prometheus nas
+- **4.4.1 — Exposição segura de métricas: aprovada tecnicamente e em Code Review, versionada em `a2dde54` na feature branch, não integrada à `main`.** Registry Prometheus nas
   duas aplicações, perfil opt-in `local,monitoramento`, bind em loopback e Basic
   operacional isolado. Preserva Bearer, Swagger, métricas da 4.2 e CI da 4.3.
   Não exige backend de monitoramento para executar/testar.
-- **4.4.2 — Coleta Prometheus: planejada, não iniciada.** Compose, scrape real das
-  aplicações no Windows por `host.docker.internal` e validação dos targets e do
-  isolamento de rede. A conectividade com loopback ainda não foi comprovada.
+- **4.4.2 — Coleta Prometheus: aprovada tecnicamente em Code Review na feature branch, não integrada à `main`.** Compose
+  independente com Prometheus 3.13.5, volume persistente, porta 9090 em loopback,
+  secrets locais e dois jobs com intervalo de 15s/timeout de 5s. A prova prévia
+  Docker Desktop → Windows alcançou ambas as aplicações em loopback por
+  `host.docker.internal`, sem alterar a segurança da 4.4.1.
 - **4.4.3 — Grafana e confiabilidade: planejada, não iniciada.** Provisionamento,
   dashboards, buckets seletivos, SLIs/SLOs e validação integrada.
 
@@ -456,6 +460,31 @@ e de servidor de gerenciamento são rejeitadas na inicialização do monitoramen
 Os dois Code Reviews foram favoráveis; a 4.4.1 está aprovada tecnicamente e em
 Code Review na feature branch `feat/4.4-monitoramento`, ainda não integrada à
 `main`. `git diff --check` sem erros. A Entrega 4.4 permanece incompleta.
+
+Validação operacional da 4.4.2 em 17/11/2026: os dois jobs ficaram `UP`, sem erro
+de autenticação. Métricas JVM/HTTP de ambas as aplicações, HTTP cliente do Banco
+DUP e JDBC da Signatária foram consultadas no Prometheus. Uma Escrituração real
+chegou a CONCLUIDO; operações dos beans do Banco DUP usaram o RestClient real e
+uma nova consulta elevou o contador coletado de 2 para 3. Dados e credenciais
+efêmeros ficaram restritos ao ambiente de prova, sem endpoints novos.
+
+Senha incorreta derrubou somente o respectivo job com HTTP 401, nas duas
+aplicações; restauração recuperou `UP`. Aplicação parada produziu conexão recusada;
+sem `monitoramento` não houve exportação; reinicialização com o perfil recuperou
+a coleta. Listeners 8080/8081/9090 permaneceram em `127.0.0.1`, com sondas TCP aos
+IPs Ethernet/Wi-Fi sem conexão e endpoints sensíveis bloqueados. Não houve
+alteração de firewall, cadeia de segurança, domínio, migrations ou CI.
+
+Compose e `promtool check config` aprovados, incluindo leitura dos secrets pelo
+UID 65534. Procedimentos e limites da prova estão no
+[guia de coleta](observabilidade.md#coleta-prometheus--entrega-442). A 4.4.2 está
+aprovada tecnicamente em Code Review na feature branch, ainda não integrada à
+`main`; Grafana e confiabilidade continuam reservados à 4.4.3.
+
+Build completo da 4.4.2: `.\gradlew.bat clean build --console=plain` aprovado em
+**3min**, com o Prometheus parado. XMLs confirmaram **322/322 testes**: 124 do
+Banco DUP e 198 da Signatária, incluindo os **10 verticais**, com zero falhas,
+erros ou ignorados. Nenhum teste ou código das aplicações foi alterado.
 
 ### 4.5 — CD
 

@@ -1,0 +1,40 @@
+name: duplicata-monitoramento
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.13.5
+    user: "65534:65534"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    secrets:
+      - financiamento_usuario
+      - financiamento_senha
+      - signataria_usuario
+      - signataria_senha
+    networks:
+      - monitoramento
+
+secrets:
+  financiamento_usuario:
+    file: ./.env.monitoramento/financiamento.usuario
+  financiamento_senha:
+    file: ./.env.monitoramento/financiamento.senha
+  signataria_usuario:
+    file: ./.env.monitoramento/signataria.usuario
+  signataria_senha:
+    file: ./.env.monitoramento/signataria.senha
+
+networks:
+  monitoramento:
+    driver: bridge
+
+volumes:
+  prometheus-data:

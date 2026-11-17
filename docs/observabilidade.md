@@ -201,8 +201,9 @@ atual está no [roadmap](roadmap.md).
 
 ## Exposição Prometheus local — Entrega 4.4.1
 
-**Situação: 4.4.1 aprovada tecnicamente e em Code Review na feature branch
-`feat/4.4-monitoramento`, ainda não integrada à `main`. A Entrega 4.4 permanece incompleta.**
+**Situação: 4.4.1 aprovada tecnicamente e em Code Review, versionada em `a2dde54`
+na feature branch `feat/4.4-monitoramento`, ainda não integrada à `main`.
+A Entrega 4.4 permanece incompleta.**
 
 As duas aplicações usam `micrometer-registry-prometheus`, com versão gerenciada
 pelo Spring Boot 4.1.1. O registry exporta os medidores da 4.2, sem novos contadores,
@@ -401,11 +402,150 @@ sobre o baseline de 277. Não havia Prometheus/Grafana em execução.
 `git diff --check` aprovado. Naquela validação inicial, ainda não havia commit,
 push, PR ou aceite final da 4.4.
 
-A 4.4.2 deverá validar o acesso de dentro do Docker Desktop usando
-`host.docker.internal:8080/8081`. `localhost` no container não aponta para o Windows.
-O bind em loopback não comprova essa conectividade. Não ampliar o bind para
-contornar falha sem revisar a fronteira de segurança. Compose, scrape, Grafana,
+A conectividade Docker Desktop → Windows foi validada na 4.4.2, abaixo;
+`localhost` no container não aponta para o Windows. O bind em loopback isoladamente
+não comprova essa conectividade. Não ampliar o bind para contornar falha sem
+revisar a fronteira de segurança. Compose e scrape pertencem à 4.4.2; Grafana,
 dashboards, alertas e SLIs/SLOs permanecem fora da 4.4.1.
 
 Referências: [acesso/exposição do Actuator](https://docs.spring.io/spring-boot/reference/actuator/endpoints.html)
 e [cadeias de segurança](https://docs.spring.io/spring-security/reference/servlet/configuration/java.html).
+
+## Coleta Prometheus — Entrega 4.4.2
+
+**Situação: aprovada tecnicamente em Code Review na feature branch
+`feat/4.4-monitoramento`, ainda não integrada à `main`.** A 4.4.1 está aprovada
+e versionada em `a2dde54` na mesma branch; a 4.4 permanece incompleta e a 4.4.3
+permanece planejada, não iniciada.
+
+### Infraestrutura e fronteira de rede
+
+O [Compose complementar](../infra/local/docker-compose.monitoramento.yml) executa
+somente a imagem oficial fixa `prom/prometheus:v3.13.5`, em rede própria e com
+volume persistente. Publica apenas `127.0.0.1:9090`. O Compose PostgreSQL, seus
+volumes e as duas aplicações no Windows permanecem independentes. Não há coletor
+OTLP adicional, Grafana, alertas, buckets ou alteração de medidores.
+
+A [configuração de scrape](../infra/local/prometheus/prometheus.yml) define:
+
+- `banco-dup` → `http://host.docker.internal:8080/actuator/prometheus`;
+- `signataria` → `http://host.docker.internal:8081/actuator/prometheus`;
+- intervalo de 15s, timeout de 5s e redirecionamentos desabilitados;
+- labels estáticos `aplicacao` e `ambiente=local`, com cardinalidade finita;
+- `basic_auth.username_file/password_file` independentes por job.
+
+Os arquivos privados de usuário/senha ficam em `infra/local/.env.monitoramento/`,
+ignorados pela regra `.env.*` existente, verificada antes da criação. São montados
+como secrets somente leitura em `/run/secrets`. O Prometheus precisa da senha
+original correspondente ao hash BCrypt externo da aplicação; Bearers não são
+usados no scrape. O processo UID/GID 65534 lê os arquivos sem privilégios. O
+sistema de arquivos raiz é somente leitura e somente o volume TSDB é gravável.
+Secrets Compose locais não criptografam arquivos em disco: mantenha ACL privada,
+não os copie para Git, logs ou relatórios e considere o host/Docker confiáveis.
+
+Provisionamento, comandos de inicialização/encerramento e consulta de targets:
+[guia de infraestrutura](../infra/local/README.md#coleta-prometheus--entrega-442).
+
+### Prova inicial antes do Compose
+
+Em 17/11/2026, Docker Desktop 4.91.0 (239619), Engine 29.8.0, contexto
+`desktop-linux`, Linux containers/WSL2. As aplicações iniciaram com
+`local,monitoramento`, PostgreSQL descartável e credenciais sintéticas privadas.
+No Windows, ambas responderam 401 sem Basic e 200 com o Basic próprio, com
+conteúdo Prometheus válido. Os listeners pertenciam às JVMs corretas e estavam
+exclusivamente em `127.0.0.1:8080/8081`.
+
+Um container Linux descartável, sem volumes ou credenciais e sem privilégios,
+resolveu `host.docker.internal` para `192.168.65.254` (também havia resposta IPv6).
+Uma requisição TCP/HTTP direta com BusyBox `nc`, sem proxy, comprovou:
+
+| Alvo no Windows | Resultado no container | Origem confirmada |
+|---|---|---|
+| Banco DUP :8080 | HTTP 401; `WWW-Authenticate: Basic realm="metricas", charset="UTF-8"` | Contador HTTP 401 da JVM: 4 → 5 |
+| Signatária :8081 | HTTP 401; mesmo desafio Basic | Contador HTTP 401 da JVM: 3 → 4 |
+
+Cada incremento foi correlacionado a uma única sonda anônima, lida por scrape
+autenticado no host. Os corpos/caminhos também corresponderam às aplicações,
+evitando confundir proxy com resposta nativa. Somente após esse gate foi criado
+o Compose. Não houve alteração de bind, firewall ou Spring Security.
+
+Essa evidência vale para o Docker Desktop testado; reexecute o gate em outra
+máquina/versão. A documentação do Docker explica
+[o endereço do host](https://docs.docker.com/desktop/features/networking/#i-want-to-connect-from-a-container-to-a-service-on-the-host),
+mas não substitui a prova com estes listeners loopback.
+
+### Coleta e operações reais
+
+`docker compose config --quiet` e `promtool check config` passaram. O próprio
+UID 65534 conseguiu ler os quatro secrets. Ambos os targets ficaram `UP`, com
+`lastError` vazio, scrape de 15s e timeout de 5s. Consultas pela API do Prometheus
+confirmaram séries JVM e HTTP servidor das duas aplicações, HTTP cliente do Banco
+DUP e JDBC da Signatária, além dos medidores de negócio existentes.
+Após parar e reiniciar o Prometheus, o volume e o replay do WAL preservaram o
+histórico: `max_over_time` ainda retornou 3 para o contador de consultas anterior
+ao reinício, enquanto a nova JVM havia reiniciado esse contador em 1.
+
+O ensaio usou PostgreSQL isolado e apenas o cadastro sintético de Sacador como
+pré-requisito. Escrituração foi recebida pelo HTTP real e processada pelo worker
+até CONCLUIDO. Solicitação de autorização e consultas foram executadas pelos
+beans reais do Banco DUP; a decisão de aprovação usou o HTTP Bearer do Sacador.
+Como o Banco DUP não possui endpoints de entrada de negócio, um executor Java
+temporário fora do repositório iniciou seu contexto/servidor real e chamou
+`ServicoConsultaRecebiveis` na mesma JVM coletada. Não houve injeção manual de
+contadores, acesso do Banco DUP ao banco da Signatária ou controller novo.
+
+Exemplo sanitizado efetivamente observado na API do Prometheus, após uma nova
+consulta pelo bean do Banco DUP:
+
+```promql
+sum(financiamento_registradora_operacao_seconds_count{job="banco-dup",operacao="consultar_duplicatas",resultado="sucesso"})
+# antes: 2; depois: 3; delta: +1
+
+sum(signataria_escrituracao_transicoes_total{job="signataria",estado="CONCLUIDO"})
+# 1 apos o processamento real
+```
+
+Consultas úteis na UI `http://127.0.0.1:9090` ou em `/api/v1/query`:
+
+```promql
+up{job=~"banco-dup|signataria"}
+count by(job) (jvm_memory_used_bytes)
+count by(job) (http_server_requests_seconds_count)
+count by(job) (http_client_requests_seconds_count)
+count by(job) (jdbc_connections_max)
+sum by(job,operacao,resultado) (financiamento_registradora_operacao_seconds_count)
+sum by(job,operacao,resultado) (signataria_operacao_seconds_count)
+sum by(job,estado,motivo) (signataria_escrituracao_transicoes_total)
+```
+
+Medidores de operação aparecem sob demanda; execute os casos de uso existentes
+antes de procurá-los. Contadores reiniciam junto com a JVM. `up=1` indica sucesso
+do scrape, sem afirmar sucesso das operações ou disponibilidade financeira.
+HTTP 401, conexão recusada e timeout de coleta são falhas técnicas de scrape;
+os labels `resultado`/`motivo` mantêm a distinção de negócio da 4.2.
+
+### Ensaios negativos e compatibilidade
+
+| Ensaio real | Resultado |
+|---|---|
+| Senha incorreta, um job por vez, em ambas as aplicações | Somente o alvo alterado DOWN, erro HTTP 401; após restaurar o arquivo, UP |
+| Cada aplicação desligada | Respectivo target DOWN, conexão recusada |
+| Cada aplicação com `local` isolado | Sem métricas: Banco DUP 404; Signatária 401 com desafio Bearer |
+| Reinicialização com `local,monitoramento` | Scrape autenticado 200 e target UP |
+| `env`, `beans`, `configprops`, `heapdump`, `loggers`, com Basic operacional | Banco DUP 404; Signatária 401; nenhum endpoint liberado |
+| Listeners do Windows 8080/8081/9090 | Somente `127.0.0.1`; publicação Docker 9090 também loopback |
+| Sondas TCP aos IPs locais Ethernet/Wi-Fi, nas três portas | Nenhuma conexão estabelecida; sem alteração de firewall |
+
+O Prometheus foi parado para executar o build completo, sem alterar Java,
+Gradle, configurações das aplicações, segurança, testes, migrations ou CI.
+`.\gradlew.bat clean build --console=plain` passou em **3min**. Os XMLs JUnit
+confirmaram **322/322 testes**: 124 do Banco DUP e 198 da Signatária, incluindo
+os **10 verticais**, com zero falhas, erros ou ignorados.
+Não foi criado framework de testes de YAML: os validadores nativos e os ensaios
+de integração real verificam a configuração efetivamente executada.
+
+Não foi realizada sonda a partir de outra máquina física da LAN. Os binds e
+as sondas aos IPs das interfaces são evidências locais, não um teste externo
+completo. A UI/API não tem autenticação e o Basic do scrape usa HTTP local;
+não publique os serviços em outra interface. Nenhum dado/segredo do ensaio deve
+ser anexado ao Code Review. Grafana, dashboards e SLIs/SLOs continuam para a 4.4.3.

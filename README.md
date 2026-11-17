@@ -59,9 +59,11 @@ A presença de uma tecnologia nesta lista não significa que ela já esteja impl
 
 **Fase de referência: Entrega 4.3 — aprovada técnica e operacionalmente em 13/11/2026, integrada à `main` em `482b7f5`, com CI pós-merge aprovado.** A 4.2 foi aprovada tecnicamente em 13/11/2026 e versionada em `54357e8`. A 4.1 permanece em `03290c8`, com validação HTTP da UI e sem inspeção visual efetiva; a 3.4 foi versionada em `27e950e` e a 3.3 em `04081ca`.
 
-A Entrega **4.4.1 está aprovada tecnicamente e em Code Review na feature branch
-`feat/4.4-monitoramento`, ainda não integrada à `main`**.
-As etapas 4.4.2 e 4.4.3 permanecem planejadas; a Entrega 4.4 não está concluída.
+A Entrega **4.4.1 está aprovada e versionada na feature branch
+`feat/4.4-monitoramento` em `a2dde54`, ainda não integrada à `main`**.
+A **4.4.2 está aprovada tecnicamente em Code Review na mesma feature branch**,
+ainda não integrada à `main`, com coleta real pelo Prometheus no Docker Desktop.
+A 4.4.3 permanece planejada; a Entrega 4.4 não está concluída.
 
 As Entregas 1, 2, 3.1 e 3.2 estão implementadas. A 3.2 recebeu aprovação técnica retrospectiva em 13/11/2026, sem evidência de aceite histórico anterior, conforme o [roadmap](docs/roadmap.md). A 3.4 exercita o fluxo completo do simulador, preservando as fronteiras entre as aplicações.
 
@@ -141,20 +143,21 @@ configurável por `TRACING_SAMPLING_PROBABILITY` (local `1.0`, demais perfis `0.
 
 Veja [métricas, segurança, configuração OTLP e testes de observabilidade](docs/observabilidade.md).
 A suíte vertical reutiliza a infraestrutura da 3.4 e um receptor OTLP efêmero para
-verificar os spans das duas JVMs. Monitoramento centralizado e dashboards continuam
-planejados para a 4.4.
+verificar os spans das duas JVMs. A coleta Prometheus da 4.4.2 está aprovada em Code Review;
+dashboards continuam planejados para a 4.4.3.
 
 Validação final da 4.2: 277 testes aprovados, incluindo dez verticais, sem falhas, erros
 ou ignorados. Três execuções independentes adicionais do teste OTLP passaram. Foram
 aprovados os ajustes de robustez do diagnóstico JDBC e da espera de spans no
-Awaitility. Nenhum backend externo de monitoramento foi validado. A entrega
+Awaitility. Na 4.2, nenhum backend externo de monitoramento foi validado. A entrega
 4.4.1 está aprovada tecnicamente na feature branch, ainda não integrada à `main`;
-4.4.2, 4.4.3 e 4.5 permanecem planejadas.
+4.4.2 está aprovada tecnicamente em Code Review na feature branch, ainda não
+integrada à `main`; 4.4.3 e 4.5 permanecem planejadas.
 
 ## Exposição Prometheus local — Entrega 4.4.1
 
-Aprovada tecnicamente e em Code Review na feature branch, ainda não integrada à
-`main`. As duas aplicações acrescentam
+Aprovada tecnicamente e em Code Review, versionada em `a2dde54` na feature branch,
+ainda não integrada à `main`. As duas aplicações acrescentam
 `GET /actuator/prometheus` somente com `local,monitoramento`, bind em
 `127.0.0.1` e HTTP Basic operacional exclusivo.
 Cada aplicação exige usuário e hash BCrypt externos, independentes dos Bearers
@@ -162,8 +165,8 @@ de Sacador/Financiador. Sem monitoramento, não são exigidas credenciais operac
 `health,info`, Swagger e `/actuator/metrics` preservam suas regras anteriores.
 
 Consulte [ativação, geração privada de credenciais e testes](docs/observabilidade.md#exposição-prometheus-local--entrega-441).
-Não há Compose de monitoramento, scrape, Grafana, buckets ou SLOs nesta etapa.
-O acesso futuro por `host.docker.internal` depende de validação na 4.4.2.
+Compose e scrape são acrescentados separadamente na 4.4.2, descrita abaixo.
+A 4.4.1 não acrescentou Grafana, buckets ou SLOs.
 
 Última validação local da 4.4.1: `clean build --console=plain` aprovado em
 **2min43s**, com **322 testes** (124 do Banco DUP e 198 da Signatária), incluindo
@@ -175,6 +178,34 @@ HTTP real nas duas aplicações. Configurações incompatíveis de rotas e de se
 de gerenciamento são rejeitadas na inicialização do monitoramento.
 O incremento está aprovado tecnicamente e em Code Review na feature branch
 `feat/4.4-monitoramento`, ainda não integrado à `main`.
+
+## Coleta Prometheus — Entrega 4.4.2
+
+**Aprovada tecnicamente em Code Review na feature branch, ainda não integrada à `main`.** O Compose
+complementar [docker-compose.monitoramento.yml](infra/local/docker-compose.monitoramento.yml)
+executa somente `prom/prometheus:v3.13.5`, publica `127.0.0.1:9090` e mantém as
+séries em volume próprio. O Compose PostgreSQL permanece independente e inalterado.
+
+A prova inicial com container Linux descartável alcançou ambas as aplicações por
+`host.docker.internal:8080/8081`, recebendo HTTP 401 com desafio Basic, sem enviar
+credenciais. As aplicações permaneceram em `127.0.0.1`, com a segurança da 4.4.1.
+Essa conectividade foi comprovada no Docker Desktop local; deve ser revalidada em
+outro ambiente, sem ampliar o bind nem abrir firewall.
+
+Os jobs `banco-dup` e `signataria` coletam `/actuator/prometheus` a cada 15s, com
+timeout de 5s e credenciais independentes em arquivos privados ignorados pelo Git.
+Ambos ficaram `UP`; foram coletadas métricas JVM, HTTP, JDBC e operações reais,
+incluindo uma Escrituração concluída pelo worker e aumento de contador após consulta.
+
+Siga o [guia de infraestrutura](infra/local/README.md#coleta-prometheus--entrega-442)
+para provisionar os arquivos privados, validar e iniciar o Compose. Veja
+[evidências, consultas e limites](docs/observabilidade.md#coleta-prometheus--entrega-442).
+O build continua independente do Prometheus; Grafana, dashboards e SLOs não fazem
+parte deste incremento.
+
+Validação da 4.4.2: `clean build --console=plain` aprovado em **3min**, com o
+Prometheus parado: **322/322 testes** (124 do Banco DUP e 198 da Signatária),
+incluindo os **10 verticais**, sem falhas, erros ou ignorados.
 
 ## Integração contínua e contribuições
 
@@ -200,7 +231,8 @@ foram publicados na execução, com retenção de sete dias.
 
 Foi validada uma execução pós-merge; a estabilidade futura será acompanhada pelas
 execuções recorrentes do CI. A 4.4.1 está aprovada tecnicamente na feature branch,
-ainda não integrada à `main`; 4.4.2, 4.4.3 e 4.5 permanecem planejadas.
+ainda não integrada à `main`; 4.4.2 está aprovada tecnicamente em Code Review na
+feature branch, ainda não integrada à `main`, e 4.4.3/4.5 permanecem planejadas.
 
 ## Evolução do projeto
 O desenvolvimento segue entregas incrementais, priorizando funcionalidades verificáveis, testes automatizados e decisões arquiteturais justificadas.

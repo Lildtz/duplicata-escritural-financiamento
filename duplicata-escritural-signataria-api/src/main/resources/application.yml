@@ -34,6 +34,9 @@ signataria:
       timeout-execucao: 10s
 
 management:
+  endpoint:
+    prometheus:
+      access: none
   otlp:
     metrics:
       export:

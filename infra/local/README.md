@@ -120,3 +120,18 @@ Na Signatária `local`, `/actuator/metrics` e `/actuator/metrics/{nome}` exigem 
 de Sacador ou Financiador provisionado. O Banco DUP mantém apenas `health,info`
 expostos por HTTP. Sampling, exportação opcional de traces, nomes dos medidores e
 comandos de teste estão no [guia de observabilidade](../../docs/observabilidade.md).
+
+## Prometheus — exposição local (4.4.1 aprovada em Code Review)
+
+A 4.4.1 está aprovada tecnicamente na feature branch `feat/4.4-monitoramento`,
+ainda não integrada à `main`. A Entrega 4.4 permanece incompleta.
+
+O perfil adicional `monitoramento` mantém as portas 8080/8081, força bind em
+`127.0.0.1` e acrescenta somente `GET /actuator/prometheus`, com Basic operacional
+independente dos participantes. Use `local,monitoramento` e provisione as
+credenciais privadas de cada aplicação conforme o
+[guia de observabilidade](../../docs/observabilidade.md#exposição-prometheus-local--entrega-441).
+O perfil `local` isolado continua funcionando sem essas credenciais.
+
+O Compose existente permanece somente com PostgreSQL. Coleta pelo Docker Desktop,
+Prometheus e Grafana pertencem à 4.4.2/4.4.3 e ainda não foram implementados.

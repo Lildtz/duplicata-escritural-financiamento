@@ -4,11 +4,15 @@ Este documento acompanha as entregas incrementais da plataforma experimental de 
 
 O progresso é registrado com base nas implementações conhecidas. Uma funcionalidade implementada ainda pode depender de Code Review, execução dos testes e homologação técnica para ser considerada concluída.
 
-**Última atualização de referência:** 13/11/2026.
+**Última atualização de referência:** 17/11/2026.
 
 ## Estado atual
 
 **Entrega 4.3 — aprovada técnica e operacionalmente em 13/11/2026; PR #1 integrado em `482b7f5`, com CI pós-merge aprovado e proteção da `main` ativa.** A 4.2 foi aprovada tecnicamente em 13/11/2026 e versionada em `54357e8`. A 4.1 permanece versionada em `03290c8` e a 3.4 em `27e950e`.
+
+A **4.4.1 está aprovada tecnicamente e em Code Review na feature branch
+`feat/4.4-monitoramento`, ainda não integrada à `main`**. A 4.4 não está
+concluída; seus incrementos 4.4.2 e 4.4.3 permanecem planejados.
 
 | Entrega | Descrição                                 | Situação                          |
 | ------- | ----------------------------------------- | --------------------------------- |
@@ -22,7 +26,7 @@ O progresso é registrado com base nas implementações conhecidas. Uma funciona
 | 4.1     | OpenAPI e Swagger UI                      | Aprovada tecnicamente em 13/11/2026; versionada em `03290c8` |
 | 4.2     | Observabilidade                          | Aprovação técnica final em 13/11/2026; versionada em `54357e8` |
 | 4.3     | CI com GitHub Actions                     | Aprovada técnica e operacionalmente em 13/11/2026; integrada em `482b7f5` |
-| 4.4     | Monitoramento                            | Planejada |
+| 4.4     | Monitoramento                            | 4.4.1 aprovada tecnicamente na feature branch, não integrada à `main`; 4.4.2 e 4.4.3 planejadas |
 | 4.5     | CD                                       | Planejada; estratégia de deploy a definir |
 
 ---
@@ -413,12 +417,45 @@ não havia commit, push ou PR; o encerramento remoto posterior está registrado 
 
 ## Planejamento restante da Fase 4
 
-Sequência aprovada; as entregas abaixo permanecem planejadas e não foram iniciadas.
+Sequência aprovada; a 4.4.1 está aprovada tecnicamente e em Code Review na feature
+branch, ainda não integrada à `main`. A Entrega 4.4 permanece incompleta.
 
 ### 4.4 — Monitoramento
 
-- Prometheus e Grafana.
-- Dashboards e SLIs/SLOs.
+- **4.4.1 — Exposição segura de métricas: aprovada tecnicamente e em Code Review na feature branch, não integrada à `main`.** Registry Prometheus nas
+  duas aplicações, perfil opt-in `local,monitoramento`, bind em loopback e Basic
+  operacional isolado. Preserva Bearer, Swagger, métricas da 4.2 e CI da 4.3.
+  Não exige backend de monitoramento para executar/testar.
+- **4.4.2 — Coleta Prometheus: planejada, não iniciada.** Compose, scrape real das
+  aplicações no Windows por `host.docker.internal` e validação dos targets e do
+  isolamento de rede. A conectividade com loopback ainda não foi comprovada.
+- **4.4.3 — Grafana e confiabilidade: planejada, não iniciada.** Provisionamento,
+  dashboards, buckets seletivos, SLIs/SLOs e validação integrada.
+
+A feature branch única é `feat/4.4-monitoramento`, base
+`bab506f759e7fe6991776876f3178cb9f43ad040`. O PR #2 foi integrado nesse commit;
+seu [CI pós-merge](https://github.com/Lildtz/duplicata-escritural-financiamento/actions/runs/43537039475)
+confirmou 277 testes, incluindo dez verticais, sem falhas, erros ou ignorados, em
+Ubuntu 24.04, com artefatos JUnit/HTML publicados. Ruleset `27240150` ativo.
+Esse é o baseline anterior à 4.4.1, não o total da nova cobertura.
+Procedimentos e limites: [observabilidade](observabilidade.md#exposição-prometheus-local--entrega-441).
+
+Validação inicial da 4.4.1 em 17/11/2026: `clean build --console=plain` aprovado
+em 3min12s, com 302 testes (114 do Banco DUP e 188 da Signatária), incluindo os
+dez verticais, sem falhas, erros ou ignorados. Cobertura acrescida em 25 testes.
+Esse resultado registra a primeira implementação, anterior à correção do bypass.
+
+Última validação da 4.4.1: `clean build --console=plain` aprovado em **2min43s**,
+com **322 testes** (124 do Banco DUP e 198 da Signatária), incluindo os
+**10 testes verticais**, com zero falhas, erros ou ignorados.
+São **45 testes adicionados** desde o baseline de 277.
+
+O bypass por remapeamento do Actuator foi reproduzido e sua correção fail-closed
+validada com HTTP real nas duas aplicações. Configurações incompatíveis de rotas
+e de servidor de gerenciamento são rejeitadas na inicialização do monitoramento.
+Os dois Code Reviews foram favoráveis; a 4.4.1 está aprovada tecnicamente e em
+Code Review na feature branch `feat/4.4-monitoramento`, ainda não integrada à
+`main`. `git diff --check` sem erros. A Entrega 4.4 permanece incompleta.
 
 ### 4.5 — CD
 

@@ -60,6 +60,9 @@ class OpenApiHttpTests {
 
     @Test
     void metricasLocaisExigemBearerEEndpointsSensiveisContinuamBloqueados() throws Exception {
+        assertThat(ambiente.getProperty("management.endpoint.prometheus.access")).isEqualTo("none");
+        assertThat(enviar("/actuator/prometheus", null, "GET").statusCode()).isEqualTo(401);
+        assertThat(enviar("/actuator/prometheus", TOKEN_FINANCIADOR, "GET").statusCode()).isEqualTo(401);
         assertThat(enviar("/actuator/metrics", null, "GET").statusCode()).isEqualTo(401);
         assertThat(enviar("/actuator/metrics", token(), "GET").statusCode()).isEqualTo(401);
         var lista = enviar("/actuator/metrics", TOKEN_FINANCIADOR, "GET");

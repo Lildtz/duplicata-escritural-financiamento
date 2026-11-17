@@ -198,3 +198,214 @@ Versionamento autorizado e registrado em `54357e8`. Nenhum backend externo de
 monitoramento foi validado; utilizou-se somente o receptor OTLP efêmero de teste.
 No aceite da 4.2, as entregas 4.3, 4.4 e 4.5 ainda estavam planejadas; o estado
 atual está no [roadmap](roadmap.md).
+
+## Exposição Prometheus local — Entrega 4.4.1
+
+**Situação: 4.4.1 aprovada tecnicamente e em Code Review na feature branch
+`feat/4.4-monitoramento`, ainda não integrada à `main`. A Entrega 4.4 permanece incompleta.**
+
+As duas aplicações usam `micrometer-registry-prometheus`, com versão gerenciada
+pelo Spring Boot 4.1.1. O registry exporta os medidores da 4.2, sem novos contadores,
+buckets ou exportação OTLP adicional. O build não exige Prometheus/Grafana.
+
+### Perfis e credenciais externas
+
+Ative explicitamente `local,monitoramento`. O perfil de monitoramento:
+
+- mantém as portas 8080 (Banco DUP) e 8081 (Signatária);
+- exige `local` e bind em `127.0.0.1`; override amplo de endereço é rejeitado;
+- exige `management.endpoints.web.base-path=/actuator` e
+  `management.endpoints.web.path-mapping.prometheus=prometheus` (valores padrão);
+  remapeamentos são rejeitados na inicialização;
+- não aceita definir `management.server.port` ou `management.server.address`,
+  mesmo com valores iguais aos principais; o gerenciamento usa o servidor existente;
+- habilita somente o endpoint adicional `/actuator/prometheus`;
+- falha na inicialização se faltar usuário/hash ou se a configuração for inválida;
+- aceita usuário de 3–64 caracteres ASCII: letras, números, ponto, hífen e sublinhado,
+  começando por letra ou número;
+- aceita hash BCrypt `$2a$`, `$2b$` ou `$2y$`, com custo de 10 a 14.
+  O limite superior mantém o custo de autenticação local controlado.
+
+| Aplicação | Variável externa | Propriedade equivalente |
+|---|---|---|
+| Banco DUP | `FINANCIAMENTO_METRICAS_USUARIO` | `financiamento.monitoramento.usuario` |
+| Banco DUP | `FINANCIAMENTO_METRICAS_SENHA_HASH` | `financiamento.monitoramento.senha-hash` |
+| Signatária | `SIGNATARIA_METRICAS_USUARIO` | `signataria.monitoramento.usuario` |
+| Signatária | `SIGNATARIA_METRICAS_SENHA_HASH` | `signataria.monitoramento.senha-hash` |
+
+Não existem valores padrão de credenciais. Use usuário e senha diferentes em cada
+aplicação. Carregue as variáveis de forma privada no ambiente do processo, ou use
+um YAML externo via `SPRING_CONFIG_ADDITIONAL_LOCATION`. Arquivos `.env.*` são
+ignorados pelo Git; não são carregados automaticamente pelo Spring.
+Não passe senha/hash nos argumentos do Gradle nem versione sua saída.
+
+As identidades Bearer e o token de integração continuam necessários para os casos
+de uso de negócio. O operador Basic não é Sacador nem Financiador; seu provider de
+autenticação existe apenas dentro da cadeia Prometheus.
+
+### Geração de credenciais locais
+
+Após resolver as dependências pelo Wrapper, use o BCrypt já fornecido pelo Spring
+Security, sem instalar ferramenta ou adicionar script ao projeto. No PowerShell:
+
+```powershell
+$cryptoJar = Get-ChildItem "$env:USERPROFILE/.gradle/caches/modules-2/files-2.1/org.springframework.security/spring-security-crypto/7.1.1" -Recurse -Filter 'spring-security-crypto-7.1.1.jar' | Select-Object -First 1 -ExpandProperty FullName
+jshell --class-path "$cryptoJar"
+```
+
+Na sessão local do JShell:
+
+```java
+import java.security.SecureRandom;
+import java.util.Base64;
+import org.springframework.security.crypto.bcrypt.BCrypt;
+byte[] bytes = new byte[32];
+new SecureRandom().nextBytes(bytes);
+String senha = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+String hash = BCrypt.hashpw(senha, BCrypt.gensalt(10));
+System.out.println("Senha aleatoria: " + senha);
+System.out.println("Hash BCrypt correspondente: " + hash);
+```
+
+A senha e o hash exibidos são privados e temporários. Guarde o hash na configuração
+externa da aplicação e a senha apenas no cliente operacional; não reutilize Bearers.
+Não copie senhas, hashes ou saídas privadas dessa sessão para commits, logs
+compartilhados ou relatórios.
+Repita a geração para a outra aplicação. Os testes automatizados geram seus
+próprios segredos aleatórios; não há senhas reais ou hashes fixos nos testes.
+
+Depois do provisionamento privado e da configuração Bearer já documentada:
+
+```powershell
+.\gradlew.bat :duplicata-escritural-financiamento-api:bootRun "--args=--spring.profiles.active=local,monitoramento"
+.\gradlew.bat :duplicata-escritural-signataria-api:bootRun "--args=--spring.profiles.active=local,monitoramento"
+```
+
+Execute cada aplicação em seu terminal. A Signatária continua exigindo PostgreSQL
+e o arquivo externo de participantes; siga o [guia local](../infra/local/README.md).
+Para inspecionar o scrape sem gravar a senha no histórico:
+
+```powershell
+$credencialMetricas = Get-Credential -Message 'Credencial operacional da aplicacao'
+Invoke-WebRequest -Uri 'http://127.0.0.1:8080/actuator/prometheus' -Headers @{
+  Authorization = 'Basic ' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(
+    $credencialMetricas.UserName + ':' + $credencialMetricas.GetNetworkCredential().Password))
+}
+Remove-Variable credencialMetricas
+```
+
+Use 8081 e a outra credencial para a Signatária. HTTP Basic não cifra o tráfego;
+este perfil serve exclusivamente à máquina local. Não publique na LAN.
+
+### Contrato de acesso e compatibilidade
+
+| Caminho | Com monitoramento | Sem monitoramento |
+|---|---|---|
+| `GET /actuator/prometheus` | Basic correto: 200; ausente/incorreto/Bearer: 401 | Não exposto |
+| Outros métodos em `/actuator/prometheus` | Basic correto: 403 | Não expostos |
+| `/actuator/health`, `/actuator/info` | Públicos como antes | Públicos como antes |
+| Signatária `/actuator/metrics[/nome]` | Mantém Bearer de participante em local | Mantém regra da 4.2 |
+| Signatária APIs de negócio | Mantêm Bearer e papéis; Basic recebe 401 | Regras anteriores |
+| Swagger da Signatária | Público em local | Regra da 4.1 |
+| `env`, `beans`, `configprops`, `heapdump`, `loggers` | Não expostos/liberados | Não expostos/liberados |
+
+A cadeia Prometheus tem precedência (`@Order(1)`), permite apenas GET no caminho
+exato e não executa `FiltroTokenLocal`. Usa Basic nativo, BCrypt e sessão
+`STATELESS`. Não cria login ou usuário padrão.
+No Banco DUP, a cadeia complementar preserva a descoberta do Actuator,
+`health,info` e os 404 de rotas inexistentes. Não autentica Basic globalmente.
+A configuração de filtros depende de contexto servlet; os testes verticais continuam
+iniciando o Banco DUP sem servidor HTTP e sem credenciais operacionais.
+
+### Restrição de rotas e servidor de gerenciamento
+
+A revisão de segurança reproduziu, antes da correção, o seguinte comportamento
+com HTTP real em `local,monitoramento`:
+
+| Configuração externa | Banco DUP sem Basic | Signatária sem Basic |
+|---|---|---|
+| Base `/manage`: `/manage/prometheus` | 200 com métricas | 401 |
+| Mapeamento `scrape`: `/actuator/scrape` | 404 | 401 |
+| Base `/actuator/health` ou mapeamento `health/prometheus` | 200 com métricas | 200 com métricas |
+| Porta separada, caminho padrão, endereço de teste em loopback | 401; Basic correto: 200 | 401; Basic correto: 200 |
+| Somente `management.server.address`, sem porta separada | Falha nativa de inicialização | Falha nativa de inicialização |
+
+Com porta separada, ambas aceitaram scrape autenticado em `127.0.0.2`, embora o
+servidor principal usasse `127.0.0.1`. No Banco DUP, combinar esse servidor com
+base `/manage` também retornou métricas sem Basic. As sondas ficaram exclusivamente
+em loopback; não foi aberto listener na LAN nem comprovada exposição por ela.
+
+A correção rejeita configurações incompatíveis no construtor de segurança do
+monitoramento, antes de servir HTTP, sem alterar as cadeias Bearer ou HTTP geral.
+Os testes iniciam as aplicações reais e verificam a falha controlada e a recusa de
+conexão nas portas principal e de gerenciamento. A restrição não se aplica a
+perfis sem `monitoramento`.
+
+O matcher oficial `EndpointRequest` acompanha os caminhos efetivos do Actuator,
+mas não restringe porta/endereço. Como esta entrega exige um caminho fixo e o
+servidor existente, rejeitar overrides mantém o contrato menor que aceitar rotas
+dinâmicas e ainda validar o servidor separadamente. O matcher fixo só é usado
+depois dessa validação.
+
+Após a correção, o `clean build --console=plain` passou em 2min43s: **322 testes**
+(124 do Banco DUP e 198 da Signatária), incluindo os dez verticais, sem falhas,
+erros ou ignorados. O ajuste acrescentou 20 casos sobre os 302 anteriores:
+oito cenários de inicialização/HTTP e duas propriedades isoladas por aplicação.
+As regressões afetadas passaram com 124 testes do Banco DUP e 84 da seleção
+HTTP/configuração da Signatária. `git diff --check` aprovado; a 4.4.1 foi aprovada
+tecnicamente e em Code Review na feature branch, ainda não integrada à `main`.
+
+### Nomes exportados
+
+Os nomes Micrometer são convertidos para nomes Prometheus. As operações devem
+ser executadas antes de procurar os medidores criados sob demanda:
+
+| Medidor | Exportação |
+|---|---|
+| `financiamento.registradora.operacao` | `financiamento_registradora_operacao_seconds_count/sum/max` |
+| `signataria.operacao` | `signataria_operacao_seconds_count/sum/max` |
+| `signataria.escrituracao.transicoes` | `signataria_escrituracao_transicoes_total` |
+| HTTP | `http_client_requests_seconds_count`, `http_server_requests_seconds_count` |
+| JVM/threads | `jvm_memory_used_bytes`, `jvm_threads_live_threads` |
+| JDBC/Hikari (Signatária) | `jdbc_connections_max`, `hikaricp_connections` |
+
+Exemplos sanitizados ilustrativos; não representam contagem financeira:
+
+```text
+financiamento_registradora_operacao_seconds_count{error="none",motivo="nenhum",operacao="consultar_duplicatas",resultado="sucesso"} 1
+signataria_escrituracao_transicoes_total{estado="CONCLUIDO",motivo="nenhum"} 1
+```
+
+Os labels próprios existentes continuam finitos. Não há IDs, CNPJ, Bearers,
+senhas, hashes, Idempotency-Key ou valores financeiros nos labels próprios.
+Nenhum medidor adicional duplica os timers ou as transições da 4.2.
+
+### Verificação e próxima etapa
+
+```powershell
+.\gradlew.bat :duplicata-escritural-financiamento-api:test --tests '*MonitoramentoHttpTests' --tests '*ConfiguracaoMetricasTests' :duplicata-escritural-signataria-api:test --tests '*MonitoramentoHttpTests' --tests '*ConfiguracaoMetricasTests'
+.\gradlew.bat clean build --console=plain
+git diff --check
+```
+
+Os testes HTTP usam servidor real, credenciais efêmeras e, na Signatária,
+PostgreSQL/Testcontainers e worker real. Conferem exportação, isolamento Basic/Bearer,
+métodos negados, endpoints sensíveis, ausência de segredos e compatibilidade local.
+
+Validação inicial em 17/11/2026: 13 testes específicos do Banco DUP e 12 da
+Signatária aprovados. A regressão passou com 114 testes do Banco DUP (incluindo os
+dez verticais) e 74 na seleção HTTP/configuração da Signatária. O
+`clean build --console=plain` passou em 3min12s: **302 testes**, sendo 114 do
+Banco DUP e 188 da Signatária, sem falhas, erros ou ignorados. São 25 testes novos
+sobre o baseline de 277. Não havia Prometheus/Grafana em execução.
+`git diff --check` aprovado. Naquela validação inicial, ainda não havia commit,
+push, PR ou aceite final da 4.4.
+
+A 4.4.2 deverá validar o acesso de dentro do Docker Desktop usando
+`host.docker.internal:8080/8081`. `localhost` no container não aponta para o Windows.
+O bind em loopback não comprova essa conectividade. Não ampliar o bind para
+contornar falha sem revisar a fronteira de segurança. Compose, scrape, Grafana,
+dashboards, alertas e SLIs/SLOs permanecem fora da 4.4.1.
+
+Referências: [acesso/exposição do Actuator](https://docs.spring.io/spring-boot/reference/actuator/endpoints.html)
+e [cadeias de segurança](https://docs.spring.io/spring-security/reference/servlet/configuration/java.html).

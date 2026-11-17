@@ -1,0 +1,16 @@
+server:
+  address: 127.0.0.1
+
+signataria:
+  monitoramento:
+    usuario: ${SIGNATARIA_METRICAS_USUARIO:}
+    senha-hash: ${SIGNATARIA_METRICAS_SENHA_HASH:}
+
+management:
+  endpoint:
+    prometheus:
+      access: read-only
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus

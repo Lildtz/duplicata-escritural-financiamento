@@ -3,6 +3,20 @@
 Execute os comandos a partir da raiz do repositório `duplicata-escritural-financiamento`.
 O nome lógico do projeto Gradle continua `duplicata-escritural-plataforma`.
 
+Para executar as aplicações em containers, consulte o [empacotamento Docker da
+4.5.1](../../docs/continuous-delivery.md#build-e-execução-local). O guia usa
+configuração externa e portas de aplicação publicadas somente em loopback;
+o PostgreSQL existente e seus volumes são preservados. O Compose de monitoramento
+da 4.4 permanece independente e inalterado.
+
+A **4.5.1 está aprovada tecnicamente em Code Review, sem achados bloqueantes**,
+com commit local autorizado. As duas imagens foram construídas e validadas
+localmente: 324 testes Gradle e seis PromQL aprovados, health, segurança básica,
+graceful shutdown e SHA-256 idêntico dos JARs recompilados verificados. As imagens
+continuam exclusivamente locais; 4.5.2 e 4.5.3 estão planejadas. A 4.5 não está
+concluída nem integrada à `main`. As limitações de CVEs, ARM64, autenticação local
+e fluxo financeiro completo pelos containers permanecem no guia de CD.
+
 `duplicata-escritural-signataria-api` é a aplicação existente, anteriormente chamada
 `duplicata-escritural-escrituradora-api`. A renomeação prevista no ADR 0003 preserva
 o comportamento de bootstrap, Actuator e persistência. Escrituração implementa

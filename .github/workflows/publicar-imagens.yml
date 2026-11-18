@@ -1,0 +1,128 @@
+name: Publicar imagens
+
+"on":
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publicar-ghcr-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  autorizar:
+    if: >-
+      github.repository == 'Lildtz/duplicata-escritural-financiamento' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == 'Lildtz/duplicata-escritural-financiamento'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.origem.outputs.sha }}
+      created: ${{ steps.origem.outputs.created }}
+    steps:
+      - name: Obter somente código confiável para validar a origem
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Testar as guardas sem acesso ao registry
+        run: python3 -B -m unittest discover -s .github/scripts -p 'test_*.py' -v
+      - name: Validar evento e ancestralidade na main
+        id: origem
+        run: python3 .github/scripts/publicacao.py autorizar
+
+  publicar:
+    needs: autorizar
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [duplicata-escritural-financiamento-api, duplicata-escritural-signataria-api]
+    env:
+      APP: ${{ matrix.app }}
+      SOURCE_SHA: ${{ needs.autorizar.outputs.sha }}
+      CREATED: ${{ needs.autorizar.outputs.created }}
+      IMAGE: ghcr.io/lildtz/${{ matrix.app }}
+      TRIVY_IMAGE: aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
+    steps:
+      - name: Obter o SHA exato aprovado pelo CI
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.autorizar.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Revalidar origem e checkout antes de usar credenciais
+        run: |
+          python3 .github/scripts/publicacao.py autorizar
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          printf 'DOCKER_CONFIG=%s/docker-config\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'SCAN_DIR=%s/analise\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - name: Autenticar no GHCR com token efêmero
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p "$DOCKER_CONFIG"
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Consultar tag existente sem sobrescrever
+        id: existente
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 .github/scripts/publicacao.py consultar
+      - name: Construir imagem linux/amd64
+        if: steps.existente.outputs.digest == ''
+        run: |
+          docker buildx build --platform linux/amd64 --load --provenance=false --sbom=false \
+            --file "$APP/Dockerfile" --tag "$IMAGE:sha-$SOURCE_SHA" \
+            --label "org.opencontainers.image.source=https://github.com/Lildtz/duplicata-escritural-financiamento" \
+            --label "org.opencontainers.image.revision=$SOURCE_SHA" \
+            --label "org.opencontainers.image.created=$CREATED" \
+            --metadata-file "$RUNNER_TEMP/build.json" .
+      - name: Validar plataforma, usuário e labels
+        run: python3 .github/scripts/publicacao.py validar
+      - name: Analisar SO e dependências Java sem montar o socket Docker
+        run: |
+          mkdir -p "$SCAN_DIR/trivy-cache"
+          docker image save --output "$RUNNER_TEMP/imagem.tar" "$IMAGE:sha-$SOURCE_SHA"
+          docker run --rm \
+            --mount "type=bind,source=$RUNNER_TEMP/imagem.tar,target=/imagem.tar,readonly" \
+            --mount "type=bind,source=$SCAN_DIR,target=/analise" \
+            "$TRIVY_IMAGE" image --scanners vuln --cache-dir /analise/trivy-cache \
+            --input /imagem.tar --format json --output "/analise/$APP-vulnerabilidades.json" --no-progress --timeout 15m
+      - name: Bloquear publicação com vulnerabilidade crítica
+        run: python3 .github/scripts/publicacao.py vulnerabilidades
+      - name: Publicar somente tag ainda ausente
+        if: steps.existente.outputs.digest == ''
+        id: nova
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 .github/scripts/publicacao.py publicar
+      - name: Registrar digest efetivamente retornado pelo GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DIGEST: ${{ steps.existente.outputs.digest || steps.nova.outputs.digest }}
+        run: python3 .github/scripts/publicacao.py registrar
+      - name: Preservar análise e rastreabilidade sem credenciais
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: publicacao-${{ matrix.app }}-${{ needs.autorizar.outputs.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/analise/${{ matrix.app }}-vulnerabilidades.json
+            ${{ runner.temp }}/${{ matrix.app }}-publicacao.json
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Encerrar autenticação
+        if: ${{ always() }}
+        run: docker logout ghcr.io

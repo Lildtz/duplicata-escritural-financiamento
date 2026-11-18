@@ -15,8 +15,11 @@ visual manual dos dashboards pelo responsável. O histórico da branch
 `feat/4.4-monitoramento` e das validações locais está preservado abaixo.
 A **4.5 está em andamento como entrega independente na branch `feat/4.5-cd`**,
 criada da `origin/main` em `42be1338`. A **4.5.1 está aprovada tecnicamente em
-Code Review, sem achados bloqueantes**, com commit local autorizado; as imagens
-permanecem exclusivamente locais. 4.5.2 e 4.5.3 são planejamento. A 4.5 ainda
+Code Review, sem achados bloqueantes**, e versionada localmente em `49c4c51`;
+as imagens permanecem exclusivamente locais. A **4.5.2 está aprovada tecnicamente
+em Code Review**, incluindo a remediação com Boot 4.1.2, com único commit local
+autorizado, sem publicação ou execução remota aprovada.
+A 4.5.3 permanece planejada. A 4.5 ainda
 não está concluída nem integrada à `main`.
 
 | Entrega | Descrição                                 | Situação                          |
@@ -32,7 +35,7 @@ não está concluída nem integrada à `main`.
 | 4.2     | Observabilidade                          | Aprovação técnica final em 13/11/2026; versionada em `54357e8` |
 | 4.3     | CI com GitHub Actions                     | Aprovada técnica e operacionalmente em 13/11/2026; integrada em `482b7f5` |
 | 4.4     | Monitoramento                            | Integrada pelo PR #3 em `42be1338`; CI pós-merge: 324 testes Gradle e seis PromQL aprovados |
-| 4.5     | Continuous Delivery                      | Em andamento independente; 4.5.1 aprovada tecnicamente em Code Review, com commit local autorizado; 4.5.2/4.5.3 planejadas; não integrada à `main` |
+| 4.5     | Continuous Delivery                      | Em andamento independente; 4.5.1 aprovada e versionada em `49c4c51`; 4.5.2 aprovada tecnicamente em Code Review, com commit local autorizado e sem publicação; 4.5.3 planejada; não integrada à `main` |
 
 ---
 
@@ -545,12 +548,14 @@ Esse encerramento sucede os registros de revisão local acima.
 
 **Em andamento, independente da branch 4.4.** Branch `feat/4.5-cd`, base
 `42be1338dce4cf305318779ce7ccf54b5bbd1796` da `origin/main` atualizada por fetch.
-O registro da aprovação técnica e um único commit local da 4.5.1 foram
-autorizados. Não há autorização para push, PR, publicação ou deploy. A 4.5
+O registro da aprovação técnica e o único commit local da 4.5.1 foram realizados
+em `49c4c51cb9dfc12f50830d01167a77678ead53c7`. A 4.5.2 foi aprovada tecnicamente
+em Code Review, incluindo a remediação, com autorização para um único commit
+local. Push, PR, merge, publicação e deploy não foram autorizados. A 4.5
 não está concluída nem integrada à `main`.
 
 - **4.5.1 — Empacotamento Docker: aprovada tecnicamente em Code Review, sem
-  achados bloqueantes.** Implementação local de uma imagem por
+  achados bloqueantes, versionada localmente em `49c4c51`.** Uma imagem por
   aplicação, build multi-stage com Wrapper e Java 21, JRE final fixado por digest,
   usuário não root, contexto restrito e configuração externa. Duas imagens
   construídas e validadas localmente; 324 testes Gradle e seis PromQL aprovados.
@@ -558,9 +563,27 @@ não está concluída nem integrada à `main`.
   recompilados verificados. Imagens exclusivamente locais; permanecem as
   ressalvas de CVEs, ARM64, autenticação local e ausência de teste completo do
   fluxo financeiro pelos containers, registradas no [guia de CD](continuous-delivery.md).
-- **4.5.2 — Publicação:** planejar GitHub Actions/GHCR somente após CI do SHA
-  aprovado da `main`/release; tags versionadas e por SHA, permissões mínimas,
-  rastreabilidade do digest. Preservar o CI obrigatório. Não implementada.
+- **4.5.2 — Publicação: aprovada tecnicamente em Code Review, com commit local autorizado.** Workflow separado
+  com `workflow_run` após CI de push aprovado da `main`, validação de repositório
+  e ancestralidade, checkout do SHA exato, permissões mínimas e concorrência por
+  commit. GHCR com tags somente `sha-<SHA completo>`, consulta antes de publicar,
+  reuso validado das existentes e registro do digest. Build linux/amd64 e scan
+  Trivy de SO/Java, com bloqueio CRITICAL; não modifica Dockerfiles ou CI.
+  Na validação inicial não houve commit ou publicação, nem execução remota
+  aprovada. Validação local: actionlint e 20 testes Python aprovados, dois builds
+  amd64 com labels conferidas. Scan real encontrou quatro CRITICAL em Tomcat
+  11.0.24 por imagem, além de HIGH em Jackson, bloqueando a publicação inicial.
+  Remediação posterior: Boot 4.1.2, Tomcat 11.0.27 e Jackson 3.1.7/2.21.7,
+  sem overrides. Build completo com 324 testes e seis PromQL aprovados;
+  23 testes Python, incluindo os 20 originais. Novos scans sem CRITICAL/HIGH
+  e guarda aprovada em ambas as imagens; 47 MEDIUM/13 LOW por imagem permanecem
+  registrados, incluindo OpenTelemetry CVE-2026-118259. Health, segurança e
+  graceful shutdown novamente verificados. O Code Review final aprovou o patch
+  completo e a remediação; os 23 testes Python também passaram em execução
+  independente do responsável. Publicação remota e funcionamento real do
+  workflow/GHCR não foram validados. OpenTelemetry permanece pendente de
+  avaliação para eventual implantação. Nenhuma aprovação remota foi declarada.
+  Estratégia, testes, achados e limites no [guia de CD](continuous-delivery.md).
 - **4.5.3 — Implantação:** definir destino e custos antes de provisionar;
   consumir imagens por digest sem recompilar, configurar secrets por ambiente,
   validar health/smoke tests e ensaiar rollback compatível com migrations.

@@ -57,17 +57,16 @@ A presença de uma tecnologia nesta lista não significa que ela já esteja impl
 
 ## Estado do projeto
 
-**Fase de referência: Entrega 4.3 — aprovada técnica e operacionalmente em 13/11/2026, integrada à `main` em `482b7f5`, com CI pós-merge aprovado.** A 4.2 foi aprovada tecnicamente em 13/11/2026 e versionada em `54357e8`. A 4.1 permanece em `03290c8`, com validação HTTP da UI e sem inspeção visual efetiva; a 3.4 foi versionada em `27e950e` e a 3.3 em `04081ca`.
+**Fase de referência: Entrega 4.4 integrada à `main` pelo [PR #3](https://github.com/Lildtz/duplicata-escritural-financiamento/pull/3), merge `42be1338dce4cf305318779ce7ccf54b5bbd1796`, com [CI pós-merge aprovado](https://github.com/Lildtz/duplicata-escritural-financiamento/actions/runs/44280078489): 324 testes Gradle e seis testes PromQL.** A 4.3 permanece integrada em `482b7f5`; a 4.2 em `54357e8`, a 4.1 em `03290c8`, a 3.4 em `27e950e` e a 3.3 em `04081ca`.
 
-A Entrega **4.4.1 está aprovada e versionada na feature branch
-`feat/4.4-monitoramento` em `a2dde54`, ainda não integrada à `main`**.
-A **4.4.2 está aprovada tecnicamente em Code Review na mesma feature branch**,
-ainda não integrada à `main`, com coleta real pelo Prometheus no Docker Desktop.
-A **4.4.3 está aprovada tecnicamente após inspeção visual manual pelo responsável**,
-com os dois dashboards funcionando. A Entrega 4.4 está completa funcionalmente na
-feature branch, com os três incrementos aprovados na revisão consolidada local.
-Os seis testes PromQL foram integrados ao workflow após validação local;
-o CI remoto da 4.4 ainda não foi validado e a entrega não está integrada à `main`.
+Os três incrementos da 4.4 foram aprovados em revisão consolidada; a validação
+visual dos dashboards foi realizada manualmente pelo responsável. A branch
+histórica foi `feat/4.4-monitoramento`, com a 4.4.1 versionada em `a2dde54`.
+A **4.5 é uma entrega independente, em andamento na branch `feat/4.5-cd`**:
+o empacotamento Docker da **4.5.1 está aprovado tecnicamente em Code Review,
+sem achados bloqueantes**, com commit local autorizado. As duas imagens foram
+construídas e validadas localmente; publicação e implantação estão planejadas.
+A 4.5 ainda não está concluída nem integrada à `main`.
 
 As Entregas 1, 2, 3.1 e 3.2 estão implementadas. A 3.2 recebeu aprovação técnica retrospectiva em 13/11/2026, sem evidência de aceite histórico anterior, conforme o [roadmap](docs/roadmap.md). A 3.4 exercita o fluxo completo do simulador, preservando as fronteiras entre as aplicações.
 
@@ -155,14 +154,13 @@ Validação final da 4.2: 277 testes aprovados, incluindo dez verticais, sem fal
 ou ignorados. Três execuções independentes adicionais do teste OTLP passaram. Foram
 aprovados os ajustes de robustez do diagnóstico JDBC e da espera de spans no
 Awaitility. Na 4.2, nenhum backend externo de monitoramento foi validado. A entrega
-4.4.1 está aprovada tecnicamente na feature branch, ainda não integrada à `main`;
-4.4.2 está aprovada tecnicamente em Code Review na feature branch, ainda não
-integrada à `main`; 4.4.3 está aprovada tecnicamente e 4.5 permanece planejada.
+4.4 está integrada à `main` pelo PR #3, com CI pós-merge aprovado. A 4.5 foi
+iniciada separadamente; publicação e implantação continuam planejadas.
 
 ## Exposição Prometheus local — Entrega 4.4.1
 
-Aprovada tecnicamente e em Code Review, versionada em `a2dde54` na feature branch,
-ainda não integrada à `main`. As duas aplicações acrescentam
+Aprovada tecnicamente e em Code Review, versionada inicialmente em `a2dde54` e
+integrada à `main` pelo PR #3. As duas aplicações acrescentam
 `GET /actuator/prometheus` somente com `local,monitoramento`, bind em
 `127.0.0.1` e HTTP Basic operacional exclusivo.
 Cada aplicação exige usuário e hash BCrypt externos, independentes dos Bearers
@@ -181,12 +179,12 @@ os **10 testes verticais**, com zero falhas, erros ou ignorados. Foram adicionad
 O bypass por remapeamento do Actuator foi reproduzido e sua correção validada com
 HTTP real nas duas aplicações. Configurações incompatíveis de rotas e de servidor
 de gerenciamento são rejeitadas na inicialização do monitoramento.
-O incremento está aprovado tecnicamente e em Code Review na feature branch
-`feat/4.4-monitoramento`, ainda não integrado à `main`.
+O incremento foi aprovado na branch `feat/4.4-monitoramento` e posteriormente
+integrado à `main` pelo PR #3.
 
 ## Coleta Prometheus — Entrega 4.4.2
 
-**Aprovada tecnicamente em Code Review na feature branch, ainda não integrada à `main`.** O Compose
+**Aprovada tecnicamente em Code Review e integrada à `main` pelo PR #3.** O Compose
 complementar [docker-compose.monitoramento.yml](infra/local/docker-compose.monitoramento.yml)
 executa somente `prom/prometheus:v3.13.5`, publica `127.0.0.1:9090` e mantém as
 séries em volume próprio. O Compose PostgreSQL permanece independente e inalterado.
@@ -214,8 +212,8 @@ incluindo os **10 verticais**, sem falhas, erros ou ignorados.
 
 ## Grafana e confiabilidade — Entrega 4.4.3
 
-**Aprovada tecnicamente após inspeção visual manual pelo responsável**, ainda não
-integrada à `main`. O Compose de
+**Aprovada tecnicamente após inspeção visual manual pelo responsável e integrada
+à `main` pelo PR #3.** O Compose de
 monitoramento acrescenta Grafana OSS **13.3.1** em `127.0.0.1:3000`, com volume
 próprio e senha administrativa aleatória em secret local ignorado pelo Git.
 Acesso anônimo e cadastro público estão desabilitados; senha ausente, caminho
@@ -246,7 +244,35 @@ A revisão consolidada local aprovou os três incrementos da 4.4. Os seis testes
 PromQL passaram novamente e foram integrados ao job obrigatório `Build e testes`,
 sem alterar seu nome ou identidade. O histórico de 324 testes Gradle foi preservado;
 o build não foi repetido nesta mudança restrita ao workflow e à documentação.
-O CI remoto ainda não foi validado e a entrega não está integrada à `main`.
+Posteriormente, o PR #3 integrou a entrega em `42be1338`; o CI pós-merge aprovou
+324 testes Gradle e seis testes PromQL, conforme o registro do estado atual.
+
+## Empacotamento Docker — Entrega 4.5.1
+
+Dois Dockerfiles multi-stage constroem as aplicações com o Gradle Wrapper e
+Java 21, com bases Temurin fixadas por digest. As imagens finais usam JRE 21 e
+UID/GID `10001:10001`, sem ferramentas de build ou perfis ativados implicitamente.
+O contexto restrito por `.dockerignore` exclui arquivos privados e saídas locais.
+
+Execute os builds na raiz:
+
+```powershell
+docker build -f duplicata-escritural-financiamento-api/Dockerfile -t duplicata-escritural-financiamento-api:4.5.1-local .
+docker build -f duplicata-escritural-signataria-api/Dockerfile -t duplicata-escritural-signataria-api:4.5.1-local .
+```
+
+Veja [decisões, configuração externa, execução em loopback e validação](docs/continuous-delivery.md).
+O guia também registra a restrição de HTTP em loopback na integração, a dependência
+PostgreSQL e o planejamento da 4.5.2/4.5.3. A 4.5 não está concluída; não há
+publicação no GHCR ou deploy nesta etapa.
+
+A **4.5.1 foi aprovada tecnicamente em Code Review**, sem achados bloqueantes.
+Foram aprovados 324 testes Gradle e seis PromQL; health, segurança básica e
+graceful shutdown foram verificados. Os JARs recompilados tiveram SHA-256
+idêntico aos das imagens, que permanecem exclusivamente locais. As ressalvas
+sobre CVEs, ARM64, autenticação local e ausência de teste completo do fluxo
+financeiro pelos containers permanecem no guia de CD. O registro da aprovação
+e o único commit local foram autorizados; 4.5.2 e 4.5.3 continuam planejadas.
 
 ## Integração contínua e contribuições
 
@@ -271,9 +297,8 @@ verticais, sem falhas, erros ou ignorados. Os [relatórios JUnit e HTML](https:/
 foram publicados na execução, com retenção de sete dias.
 
 Foi validada uma execução pós-merge; a estabilidade futura será acompanhada pelas
-execuções recorrentes do CI. A 4.4.1 está aprovada tecnicamente na feature branch,
-ainda não integrada à `main`; 4.4.2 está aprovada tecnicamente em Code Review na
-feature branch, ainda não integrada à `main`; 4.4.3 está aprovada tecnicamente e 4.5 permanece planejada.
+execuções recorrentes do CI. O PR #3 integrou posteriormente a 4.4 e seu CI
+pós-merge aprovou 324 testes Gradle e seis testes PromQL. A 4.5 segue em andamento.
 
 ## Evolução do projeto
 O desenvolvimento segue entregas incrementais, priorizando funcionalidades verificáveis, testes automatizados e decisões arquiteturais justificadas.

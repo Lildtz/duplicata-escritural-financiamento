@@ -8,16 +8,16 @@ O progresso é registrado com base nas implementações conhecidas. Uma funciona
 
 ## Estado atual
 
-**Entrega 4.3 — aprovada técnica e operacionalmente em 13/11/2026; PR #1 integrado em `482b7f5`, com CI pós-merge aprovado e proteção da `main` ativa.** A 4.2 foi aprovada tecnicamente em 13/11/2026 e versionada em `54357e8`. A 4.1 permanece versionada em `03290c8` e a 3.4 em `27e950e`.
+**Entrega 4.4 — integrada à `main` pelo [PR #3](https://github.com/Lildtz/duplicata-escritural-financiamento/pull/3), merge `42be1338dce4cf305318779ce7ccf54b5bbd1796`, com [CI pós-merge aprovado](https://github.com/Lildtz/duplicata-escritural-financiamento/actions/runs/44280078489): 324 testes Gradle e seis testes PromQL.** A 4.3 permanece integrada em `482b7f5`, com proteção da `main` ativa; a 4.2 em `54357e8`, a 4.1 em `03290c8` e a 3.4 em `27e950e`.
 
-A **4.4.1 está aprovada e versionada em `a2dde54` na feature branch
-`feat/4.4-monitoramento`, ainda não integrada à `main`**. A 4.4.2 está aprovada
-tecnicamente em Code Review na mesma branch,
-ainda não integrada à `main`, e a 4.4.3 está aprovada tecnicamente após inspeção
-visual manual pelo responsável. A 4.4 está completa funcionalmente na feature
-branch, com os três incrementos aprovados na revisão consolidada local e seis
-testes PromQL integrados ao workflow após validação local. O CI remoto da 4.4
-ainda não foi validado e a entrega não está integrada à `main`.
+Os três incrementos da 4.4 foram aprovados em revisão consolidada, com inspeção
+visual manual dos dashboards pelo responsável. O histórico da branch
+`feat/4.4-monitoramento` e das validações locais está preservado abaixo.
+A **4.5 está em andamento como entrega independente na branch `feat/4.5-cd`**,
+criada da `origin/main` em `42be1338`. A **4.5.1 está aprovada tecnicamente em
+Code Review, sem achados bloqueantes**, com commit local autorizado; as imagens
+permanecem exclusivamente locais. 4.5.2 e 4.5.3 são planejamento. A 4.5 ainda
+não está concluída nem integrada à `main`.
 
 | Entrega | Descrição                                 | Situação                          |
 | ------- | ----------------------------------------- | --------------------------------- |
@@ -31,8 +31,8 @@ ainda não foi validado e a entrega não está integrada à `main`.
 | 4.1     | OpenAPI e Swagger UI                      | Aprovada tecnicamente em 13/11/2026; versionada em `03290c8` |
 | 4.2     | Observabilidade                          | Aprovação técnica final em 13/11/2026; versionada em `54357e8` |
 | 4.3     | CI com GitHub Actions                     | Aprovada técnica e operacionalmente em 13/11/2026; integrada em `482b7f5` |
-| 4.4     | Monitoramento                            | Três incrementos aprovados na revisão consolidada local; inspeção visual manual confirmada; seis testes PromQL integrados ao CI; CI remoto não validado; não integrada à `main` |
-| 4.5     | CD                                       | Planejada; estratégia de deploy a definir |
+| 4.4     | Monitoramento                            | Integrada pelo PR #3 em `42be1338`; CI pós-merge: 324 testes Gradle e seis PromQL aprovados |
+| 4.5     | Continuous Delivery                      | Em andamento independente; 4.5.1 aprovada tecnicamente em Code Review, com commit local autorizado; 4.5.2/4.5.3 planejadas; não integrada à `main` |
 
 ---
 
@@ -423,10 +423,10 @@ não havia commit, push ou PR; o encerramento remoto posterior está registrado 
 
 ## Planejamento restante da Fase 4
 
-Sequência aprovada; a 4.4.1 está aprovada tecnicamente e em Code Review e versionada
-em `a2dde54` na feature branch, ainda não integrada à `main`. Com a aprovação da
-4.4.3 e da revisão consolidada local, os três incrementos da 4.4 estão aprovados
-localmente. O CI remoto da 4.4 ainda não foi validado.
+Sequência aprovada. A 4.4 foi integrada em `42be1338`, com CI pós-merge aprovado.
+A 4.5 foi iniciada em branch independente a partir desse baseline. Os registros
+da preparação e das validações locais da 4.4 abaixo descrevem o estado anterior
+ao merge; são preservados como histórico, não como pendências atuais.
 
 ### 4.4 — Monitoramento
 
@@ -535,10 +535,36 @@ e **seis testes PromQL**; o build Gradle não foi repetido por não haver mudan�
 Java ou na execução de seus testes. O **CI remoto ainda não foi validado**;
 a entrega **não está integrada à `main`**. Esta revisão não criou commit, push ou PR.
 
-### 4.5 — CD
+**Encerramento remoto da 4.4:** PR #3 integrado à `main` no merge
+`42be1338dce4cf305318779ce7ccf54b5bbd1796`. O CI de push desse SHA está concluído
+com sucesso na execução [44280078489](https://github.com/Lildtz/duplicata-escritural-financiamento/actions/runs/44280078489).
+Baseline pós-merge informado: 324 testes Gradle e seis testes PromQL aprovados.
+Esse encerramento sucede os registros de revisão local acima.
 
-- Empacotamento e publicação.
-- Estratégia de deploy a definir.
+### 4.5 — Continuous Delivery
+
+**Em andamento, independente da branch 4.4.** Branch `feat/4.5-cd`, base
+`42be1338dce4cf305318779ce7ccf54b5bbd1796` da `origin/main` atualizada por fetch.
+O registro da aprovação técnica e um único commit local da 4.5.1 foram
+autorizados. Não há autorização para push, PR, publicação ou deploy. A 4.5
+não está concluída nem integrada à `main`.
+
+- **4.5.1 — Empacotamento Docker: aprovada tecnicamente em Code Review, sem
+  achados bloqueantes.** Implementação local de uma imagem por
+  aplicação, build multi-stage com Wrapper e Java 21, JRE final fixado por digest,
+  usuário não root, contexto restrito e configuração externa. Duas imagens
+  construídas e validadas localmente; 324 testes Gradle e seis PromQL aprovados.
+  Health, segurança básica, graceful shutdown e SHA-256 idêntico dos JARs
+  recompilados verificados. Imagens exclusivamente locais; permanecem as
+  ressalvas de CVEs, ARM64, autenticação local e ausência de teste completo do
+  fluxo financeiro pelos containers, registradas no [guia de CD](continuous-delivery.md).
+- **4.5.2 — Publicação:** planejar GitHub Actions/GHCR somente após CI do SHA
+  aprovado da `main`/release; tags versionadas e por SHA, permissões mínimas,
+  rastreabilidade do digest. Preservar o CI obrigatório. Não implementada.
+- **4.5.3 — Implantação:** definir destino e custos antes de provisionar;
+  consumir imagens por digest sem recompilar, configurar secrets por ambiente,
+  validar health/smoke tests e ensaiar rollback compatível com migrations.
+  Não implementada.
 
 ## Evoluções previstas
 

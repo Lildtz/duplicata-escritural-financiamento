@@ -125,7 +125,8 @@ comandos de teste estão no [guia de observabilidade](../../docs/observabilidade
 
 A 4.4.1 está aprovada tecnicamente e versionada em `a2dde54` na feature branch
 `feat/4.4-monitoramento`, ainda não integrada à `main`. Com a aprovação da 4.4.3,
-a 4.4 está completa funcionalmente na feature branch, com revisão consolidada pendente.
+a 4.4 está completa funcionalmente na feature branch, com os três incrementos
+aprovados na revisão consolidada local. O CI remoto ainda não foi validado.
 
 O perfil adicional `monitoramento` mantém as portas 8080/8081, força bind em
 `127.0.0.1` e acrescenta somente `GET /actuator/prometheus`, com Basic operacional
@@ -289,15 +290,18 @@ de arquivos de credenciais operacionais. Consulte
 
 **Aprovada tecnicamente após inspeção visual manual pelo responsável.** A 4.4 está
 completa funcionalmente na feature branch, ainda não integrada à `main`, com
-revisão consolidada pendente. O mesmo Compose acrescenta somente Grafana OSS 13.3.1; o serviço
-Prometheus e o Compose PostgreSQL permanecem preservados.
+revisão consolidada local aprovada. O mesmo Compose acrescenta somente Grafana
+OSS 13.3.1; o serviço Prometheus e o Compose PostgreSQL permanecem preservados.
 
 O responsável confirmou os dois dashboards funcionando corretamente; a inspeção
 não foi realizada pelo Computer Use. Permanecem aprovadas as 28 consultas PromQL,
 os seis testes nativos e os 324 testes Gradle (125 do Banco DUP, 199 da Signatária,
-incluindo dez verticais), sem falhas, erros ou ignorados. A decisão sobre
-automatizar os seis testes PromQL no GitHub Actions fica para a revisão consolidada;
-o workflow não foi alterado.
+incluindo dez verticais), sem falhas, erros ou ignorados. Após nova validação local,
+os seis testes PromQL foram integrados ao workflow existente, no job obrigatório
+`Build e testes` (`build-test`), com `promtool` da imagem `prom/prometheus:v3.13.5`,
+sem secrets ou serviços. O histórico Gradle foi preservado, sem repetir o build
+nesta mudança de workflow/documentação. O CI remoto ainda não foi validado e
+a entrega não está integrada à `main`.
 
 ### Senha administrativa inicial
 

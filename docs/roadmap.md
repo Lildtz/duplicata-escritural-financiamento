@@ -15,7 +15,9 @@ A **4.4.1 está aprovada e versionada em `a2dde54` na feature branch
 tecnicamente em Code Review na mesma branch,
 ainda não integrada à `main`, e a 4.4.3 está aprovada tecnicamente após inspeção
 visual manual pelo responsável. A 4.4 está completa funcionalmente na feature
-branch, ainda não integrada à `main`, com revisão consolidada pendente.
+branch, com os três incrementos aprovados na revisão consolidada local e seis
+testes PromQL integrados ao workflow após validação local. O CI remoto da 4.4
+ainda não foi validado e a entrega não está integrada à `main`.
 
 | Entrega | Descrição                                 | Situação                          |
 | ------- | ----------------------------------------- | --------------------------------- |
@@ -29,7 +31,7 @@ branch, ainda não integrada à `main`, com revisão consolidada pendente.
 | 4.1     | OpenAPI e Swagger UI                      | Aprovada tecnicamente em 13/11/2026; versionada em `03290c8` |
 | 4.2     | Observabilidade                          | Aprovação técnica final em 13/11/2026; versionada em `54357e8` |
 | 4.3     | CI com GitHub Actions                     | Aprovada técnica e operacionalmente em 13/11/2026; integrada em `482b7f5` |
-| 4.4     | Monitoramento                            | Completa funcionalmente na feature branch; 4.4.3 aprovada após inspeção visual manual pelo responsável; revisão consolidada pendente; não integrada à `main` |
+| 4.4     | Monitoramento                            | Três incrementos aprovados na revisão consolidada local; inspeção visual manual confirmada; seis testes PromQL integrados ao CI; CI remoto não validado; não integrada à `main` |
 | 4.5     | CD                                       | Planejada; estratégia de deploy a definir |
 
 ---
@@ -423,7 +425,8 @@ não havia commit, push ou PR; o encerramento remoto posterior está registrado 
 
 Sequência aprovada; a 4.4.1 está aprovada tecnicamente e em Code Review e versionada
 em `a2dde54` na feature branch, ainda não integrada à `main`. Com a aprovação da
-4.4.3, a 4.4 está completa funcionalmente na feature branch; falta a revisão consolidada.
+4.4.3 e da revisão consolidada local, os três incrementos da 4.4 estão aprovados
+localmente. O CI remoto da 4.4 ainda não foi validado.
 
 ### 4.4 — Monitoramento
 
@@ -442,7 +445,7 @@ em `a2dde54` na feature branch, ainda não integrada à `main`. Com a aprovaçã
   de 99% técnico/p95 de consulta até 2s, com ausência de tráfego e volume mínimo
   tratados explicitamente. Os dois dashboards foram confirmados funcionando pelo
   responsável. A 4.4 está completa funcionalmente na feature branch, não integrada
-  à `main`, com revisão consolidada pendente.
+  à `main`, com revisão consolidada local aprovada e CI remoto ainda não validado.
 
 A feature branch única é `feat/4.4-monitoramento`, base
 `bab506f759e7fe6991776876f3178cb9f43ad040`. O PR #2 foi integrado nesse commit;
@@ -517,9 +520,20 @@ confirmada após inspeção visual manual do responsável, que atestou o funcion
 dos dashboards Saúde e integração e Operações de Duplicatas. O Computer Use não
 realizou essa inspeção e não há screenshots automatizados dessa validação.
 
-**Pendência para o Code Review consolidado da 4.4:** decidir se e como executar
-automaticamente os seis testes PromQL no GitHub Actions. O workflow permanece
-inalterado nesta entrega; a execução manual com `promtool` está documentada.
+**Revisão consolidada local em 18/11/2026:** os três incrementos foram aprovados,
+sem achados que exijam alterar a infraestrutura funcional. A inspeção visual dos
+dois dashboards permanece confirmada manualmente pelo responsável.
+Os seis testes PromQL passaram novamente com `prom/prometheus:v3.13.5` e foram
+integrados ao job obrigatório `build-test`, nome `Build e testes`, no workflow
+existente. A execução usa `promtool test rules` em container descartável, sem
+rede, secrets ou serviços, e falha o job em caso de erro. Java 21, Gradle,
+cache, resumo e publicação dos relatórios JUnit permanecem preservados.
+Workflow validado com `actionlint 1.7.12`; as seis expressões de teste coincidem
+com as dos dashboards. `git diff --check` aprovado e nenhum segredo adicionado.
+Preserva-se o histórico de **324/324 testes Gradle**, incluindo dez verticais,
+e **seis testes PromQL**; o build Gradle não foi repetido por não haver mudanças
+Java ou na execução de seus testes. O **CI remoto ainda não foi validado**;
+a entrega **não está integrada à `main`**. Esta revisão não criou commit, push ou PR.
 
 ### 4.5 — CD
 

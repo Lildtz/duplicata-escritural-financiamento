@@ -417,7 +417,8 @@ e [cadeias de segurança](https://docs.spring.io/spring-security/reference/servl
 `feat/4.4-monitoramento`, ainda não integrada à `main`.** A 4.4.1 está aprovada
 e versionada em `a2dde54` na mesma branch. Com a aprovação da 4.4.3, a 4.4 está
 completa funcionalmente na feature branch, ainda não integrada à `main`, com
-revisão consolidada pendente, conforme a seção abaixo.
+revisão consolidada local aprovada, conforme a seção abaixo. O CI remoto da 4.4
+ainda não foi validado.
 
 ### Infraestrutura e fronteira de rede
 
@@ -556,8 +557,8 @@ da 4.4.2; são acrescentados separadamente pela 4.4.3.
 
 **Situação: aprovada tecnicamente após confirmação da inspeção visual manual
 pelo responsável.** A 4.4 está completa funcionalmente na feature branch, ainda
-não integrada à `main`, com revisão consolidada pendente. Não há declaração de
-CI remoto da 4.4.3.
+não integrada à `main`, com os três incrementos aprovados na revisão consolidada
+local. O CI remoto da 4.4 ainda não foi validado.
 
 ### Contrato dos sinais antes dos indicadores
 
@@ -757,13 +758,24 @@ a inspeção; não são alegados screenshots ou evidência visual automatizada.
 As 28 consultas PromQL, seis testes nativos e 324 testes Gradle, incluindo dez
 verticais, permanecem aprovados, sem alteração funcional posterior.
 
-**Pendência para a revisão consolidada:** decidir se e como automatizar os seis
-testes PromQL no GitHub Actions. Nenhuma alteração de workflow foi realizada.
+**Revisão consolidada local em 18/11/2026:** os três incrementos da 4.4 foram
+aprovados, preservando a confirmação visual manual do responsável. Os seis casos
+PromQL passaram novamente com `prom/prometheus:v3.13.5` e suas expressões coincidem
+exatamente com as dos dashboards. Foram integrados ao
+[workflow existente](../.github/workflows/ci.yml), no job `build-test`, com o nome
+obrigatório `Build e testes` preservado. O passo usa `promtool test rules` em
+container descartável, com montagem somente leitura e sem rede, secrets ou
+inicialização de serviços; qualquer teste reprovado falha o job.
+O workflow passou no `actionlint 1.7.12`. Gradle, Java 21, cache e relatórios JUnit
+permanecem preservados. Os **324/324 testes Gradle**, incluindo dez verticais,
+permanecem como evidência do build anterior, sem nova execução nesta mudança de
+workflow/documentação. Os **seis testes PromQL** foram executados nesta revisão.
+O **CI remoto ainda não foi validado** e a entrega **não está integrada à `main`**.
 
 Limites: uso HTTP exclusivamente local e secrets em disco privado, sem autenticação
 de produção. Não houve sonda de outra máquina física da LAN. A validação automatizada
 dos dados usou queries e frames da API, complementada pela inspeção visual manual
 do responsável. Reinício de JVM zera contadores; `rate`/`increase` tratam resets,
 mas não recuperam eventos nunca coletados. Retenção/backup e metas de produção
-não foram definidos. Configurações de negócio, segurança Basic/Bearer, OTLP/W3C,
-PostgreSQL e CI permanecem preservados.
+não foram definidos. Configurações de negócio, segurança Basic/Bearer, OTLP/W3C
+e PostgreSQL permanecem preservados; o CI recebeu somente o passo PromQL descrito acima.

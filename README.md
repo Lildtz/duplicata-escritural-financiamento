@@ -65,7 +65,9 @@ A **4.4.2 está aprovada tecnicamente em Code Review na mesma feature branch**,
 ainda não integrada à `main`, com coleta real pelo Prometheus no Docker Desktop.
 A **4.4.3 está aprovada tecnicamente após inspeção visual manual pelo responsável**,
 com os dois dashboards funcionando. A Entrega 4.4 está completa funcionalmente na
-feature branch, ainda não integrada à `main`; a revisão consolidada permanece pendente.
+feature branch, com os três incrementos aprovados na revisão consolidada local.
+Os seis testes PromQL foram integrados ao workflow após validação local;
+o CI remoto da 4.4 ainda não foi validado e a entrega não está integrada à `main`.
 
 As Entregas 1, 2, 3.1 e 3.2 estão implementadas. A 3.2 recebeu aprovação técnica retrospectiva em 13/11/2026, sem evidência de aceite histórico anterior, conforme o [roadmap](docs/roadmap.md). A 3.4 exercita o fluxo completo do simulador, preservando as fronteiras entre as aplicações.
 
@@ -240,8 +242,11 @@ incluindo os **10 verticais**, zero falhas, erros ou ignorados. Seis casos PromQ
 adicionais passaram no `promtool`; os dois dashboards foram verificados pela API
 com dados reais. O responsável confirmou pessoalmente o funcionamento dos dois
 dashboards. Essa validação visual é manual; o Computer Use não realizou a inspeção.
-A 4.4 está completa funcionalmente na feature branch, com revisão consolidada
-pendente, incluindo a decisão sobre automatizar os seis testes PromQL no CI.
+A revisão consolidada local aprovou os três incrementos da 4.4. Os seis testes
+PromQL passaram novamente e foram integrados ao job obrigatório `Build e testes`,
+sem alterar seu nome ou identidade. O histórico de 324 testes Gradle foi preservado;
+o build não foi repetido nesta mudança restrita ao workflow e à documentação.
+O CI remoto ainda não foi validado e a entrega não está integrada à `main`.
 
 ## Integração contínua e contribuições
 

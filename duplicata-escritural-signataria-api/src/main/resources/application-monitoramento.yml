@@ -1,0 +1,26 @@
+server:
+  address: 127.0.0.1
+
+signataria:
+  monitoramento:
+    usuario: ${SIGNATARIA_METRICAS_USUARIO:}
+    senha-hash: ${SIGNATARIA_METRICAS_SENHA_HASH:}
+
+management:
+  metrics:
+    distribution:
+      percentiles-histogram:
+        signataria.operacao: true
+      minimum-expected-value:
+        signataria.operacao: 1ms
+      maximum-expected-value:
+        signataria.operacao: 10s
+      slo:
+        signataria.operacao: 2s
+  endpoint:
+    prometheus:
+      access: read-only
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus

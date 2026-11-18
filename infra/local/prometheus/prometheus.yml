@@ -1,0 +1,30 @@
+global:
+  scrape_interval: 15s
+  scrape_timeout: 5s
+
+scrape_configs:
+  - job_name: banco-dup
+    metrics_path: /actuator/prometheus
+    follow_redirects: false
+    basic_auth:
+      username_file: /run/secrets/financiamento_usuario
+      password_file: /run/secrets/financiamento_senha
+    static_configs:
+      - targets:
+          - host.docker.internal:8080
+        labels:
+          aplicacao: duplicata-escritural-financiamento-api
+          ambiente: local
+
+  - job_name: signataria
+    metrics_path: /actuator/prometheus
+    follow_redirects: false
+    basic_auth:
+      username_file: /run/secrets/signataria_usuario
+      password_file: /run/secrets/signataria_senha
+    static_configs:
+      - targets:
+          - host.docker.internal:8081
+        labels:
+          aplicacao: duplicata-escritural-signataria-api
+          ambiente: local

@@ -1,0 +1,12 @@
+apiVersion: 1
+
+providers:
+  - name: duplicata-local
+    orgId: 1
+    folder: Duplicata local
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 15
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards

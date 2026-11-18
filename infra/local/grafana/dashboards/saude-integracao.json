@@ -1,0 +1,785 @@
+{
+  "uid": "duplicata-saude",
+  "title": "Duplicata — Saúde e integração",
+  "description": "Monitoramento local do simulador. Indicadores experimentais; não representam disponibilidade financeira.",
+  "tags": [
+    "duplicata",
+    "local",
+    "4.4.3"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "refresh": "15s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "Como interpretar",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 3
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Coleta ≠ disponibilidade integral do negócio.** `up` verifica o scrape Basic. Desligamentos planejados permanecem no histórico; selecione uma janela de ensaio ativo antes de avaliar confiabilidade. Séries ausentes ficam como **Sem dados**."
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Coleta agora — 0/1",
+      "description": "Estado do último scrape; não é um teste de operação financeira.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "duplicata-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 3,
+        "w": 8,
+        "h": 5
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "up{job=~\"banco-dup|signataria\"}",
+          "legendFormat": "{{job}}",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sem dados",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "UP",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Coleta observada — últimos 15min",
+      "description": "Percentual de scrapes bem-sucedidos. Sem meta de disponibilidade; desligamento intencional não é incidente de produção.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "duplicata-prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 3,
+        "w": 8,
+        "h": 5
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "100 * avg_over_time(up{job=~\"banco-dup|signataria\"}[15m])",
+          "legendFormat": "{{job}}",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "noValue": "Sem dados",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "HTTP servidor — req/s",
+      "description": "Inclui Actuator e autenticação; tráfego de scrape não equivale a operação de negócio.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "duplicata-prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 3,
+        "w": 8,
+        "h": 5
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by(job) (rate(http_server_requests_seconds_count{job=~\"banco-dup|signataria\"}[5m]))",
+          "legendFormat": "{{job}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "Sem dados",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Histórico da coleta",
+      "description": "0 = scrape falhou; 1 = respondeu. Ausência de série não é preenchida artificialmente.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "duplicata-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "up{job=~\"banco-dup|signataria\"}",
+          "legendFormat": "{{job}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sem dados",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Integração HTTP cliente — req/s",
+      "description": "Chamadas reais do Banco DUP, agrupadas por template de rota e status HTTP.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "duplicata-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by(status,uri) (rate(http_client_requests_seconds_count{job=\"banco-dup\"}[5m]))",
+          "legendFormat": "{{status}} {{uri}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "Sem dados",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Erros HTTP servidor — categoria e rota",
+      "description": "CLIENT_ERROR inclui autenticação, autorização e requisições inválidas; não classificar todo 4xx como falha técnica ou rejeição financeira.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "duplicata-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by(job,outcome,uri) (rate(http_server_requests_seconds_count{job=~\"banco-dup|signataria\",status=~\"[45]..\"}[5m]))",
+          "legendFormat": "{{job}} {{outcome}} {{uri}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "Sem dados",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Latência HTTP média",
+      "description": "Média ponderada por requisição. Timers HTTP não recebem histogramas; não é p95.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "duplicata-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 15,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by(job) (rate(http_server_requests_seconds_sum{job=~\"banco-dup|signataria\"}[5m])) / (sum by(job) (rate(http_server_requests_seconds_count{job=~\"banco-dup|signataria\"}[5m])) > 0)",
+          "legendFormat": "{{job}} servidor",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by(job) (rate(http_client_requests_seconds_sum{job=\"banco-dup\"}[5m])) / (sum by(job) (rate(http_client_requests_seconds_count{job=\"banco-dup\"}[5m])) > 0)",
+          "legendFormat": "{{job}} cliente",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "Sem dados",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Latência média das operações",
+      "description": "Timers semânticos por camada/operação; não somar as duas camadas como uma única chamada.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "duplicata-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by(job,operacao) (rate({__name__=~\"financiamento_registradora_operacao_seconds_sum|signataria_operacao_seconds_sum\",job=~\"banco-dup|signataria\"}[5m])) / (sum by(job,operacao) (rate({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\"}[5m])) > 0)",
+          "legendFormat": "{{job}} {{operacao}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "Sem dados",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "JVM — heap",
+      "description": "Memória efetivamente usada e comprometida, sem inferir memória física do Windows.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "duplicata-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 22,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by(job) (jvm_memory_used_bytes{job=~\"banco-dup|signataria\",area=\"heap\"})",
+          "legendFormat": "{{job}} usada",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by(job) (jvm_memory_committed_bytes{job=~\"banco-dup|signataria\",area=\"heap\"})",
+          "legendFormat": "{{job}} comprometida",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "noValue": "Sem dados",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Threads JVM",
+      "description": "Threads vivas de cada JVM.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "duplicata-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 29,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "jvm_threads_live_threads{job=~\"banco-dup|signataria\"}",
+          "legendFormat": "{{job}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sem dados",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Pausas GC — tempo por segundo",
+      "description": "Soma do tempo de pausa por segundo; métrica nativa, não CPU do host.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "duplicata-prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 29,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by(job) (rate(jvm_gc_pause_seconds_sum{job=~\"banco-dup|signataria\"}[5m]))",
+          "legendFormat": "{{job}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "Sem dados",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Signatária — pool JDBC/Hikari",
+      "description": "Conexões ativas, ociosas e limite do pool da Signatária.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "duplicata-prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 29,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "hikaricp_connections_active{job=\"signataria\"}",
+          "legendFormat": "{{pool}} ativas",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "hikaricp_connections_idle{job=\"signataria\"}",
+          "legendFormat": "{{pool}} ociosas",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "jdbc_connections_max{job=\"signataria\"}",
+          "legendFormat": "{{name}} limite",
+          "refId": "C",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sem dados",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    }
+  ]
+}

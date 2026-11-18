@@ -43,6 +43,14 @@ jobs:
       - name: Executar build completo
         run: ./gradlew clean build --no-daemon --console=plain
 
+      - name: Executar testes PromQL
+        run: |
+          docker run --rm --network none \
+            --mount "type=bind,source=${GITHUB_WORKSPACE}/infra/local/grafana/tests,target=/tests,readonly" \
+            --entrypoint /bin/promtool \
+            prom/prometheus:v3.13.5 \
+            test rules /tests/indicadores.test.yml
+
       - name: Resumir resultados JUnit
         if: ${{ always() }}
         shell: bash

@@ -44,10 +44,12 @@ class SignatariaApplicationTests {
         assertThat(environment.getProperty("springdoc.api-docs.enabled", Boolean.class)).isFalse();
         assertThat(environment.getProperty("springdoc.swagger-ui.enabled", Boolean.class)).isFalse();
         assertThat(environment.getProperty("management.endpoints.web.exposure.include")).isEqualTo("health,info");
+        assertThat(environment.getProperty("management.endpoint.prometheus.access")).isEqualTo("none");
         int port = environment.getRequiredProperty("local.server.port", Integer.class);
         try (var client = HttpClient.newHttpClient()) {
             for (String caminho : java.util.List.of("/v3/api-docs", "/v3/api-docs/swagger-config", "/swagger-ui.html",
-                    "/swagger-ui/index.html", "/swagger-ui/swagger-ui-bundle.js", "/actuator/metrics", "/actuator/metrics/jvm.memory.used")) {
+                    "/swagger-ui/index.html", "/swagger-ui/swagger-ui-bundle.js", "/actuator/prometheus",
+                    "/actuator/metrics", "/actuator/metrics/jvm.memory.used")) {
                 var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + caminho)).GET().build();
                 assertThat(client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode()).isEqualTo(401);
             }

@@ -120,3 +120,296 @@ Na Signatária `local`, `/actuator/metrics` e `/actuator/metrics/{nome}` exigem 
 de Sacador ou Financiador provisionado. O Banco DUP mantém apenas `health,info`
 expostos por HTTP. Sampling, exportação opcional de traces, nomes dos medidores e
 comandos de teste estão no [guia de observabilidade](../../docs/observabilidade.md).
+
+## Prometheus — exposição local (4.4.1 aprovada em Code Review)
+
+A 4.4.1 está aprovada tecnicamente e versionada em `a2dde54` na feature branch
+`feat/4.4-monitoramento`, ainda não integrada à `main`. Com a aprovação da 4.4.3,
+a 4.4 está completa funcionalmente na feature branch, com os três incrementos
+aprovados na revisão consolidada local. O CI remoto ainda não foi validado.
+
+O perfil adicional `monitoramento` mantém as portas 8080/8081, força bind em
+`127.0.0.1` e acrescenta somente `GET /actuator/prometheus`, com Basic operacional
+independente dos participantes. Use `local,monitoramento` e provisione as
+credenciais privadas de cada aplicação conforme o
+[guia de observabilidade](../../docs/observabilidade.md#exposição-prometheus-local--entrega-441).
+O perfil `local` isolado continua funcionando sem essas credenciais.
+
+O Compose existente permanece somente com PostgreSQL. O Compose complementar
+abaixo acrescenta a coleta da 4.4.2, aprovada tecnicamente em Code Review na
+feature branch, ainda não integrada à `main`; Grafana é acrescentado pela 4.4.3,
+aprovada tecnicamente após inspeção visual manual pelo responsável.
+
+## Coleta Prometheus — Entrega 4.4.2
+
+**Aprovada tecnicamente em Code Review na feature branch, ainda não integrada à `main`.**
+Requer Docker Desktop em Linux
+containers, Engine disponível e as duas aplicações executadas no Windows com
+`local,monitoramento`. O arquivo `docker-compose.monitoramento.yml` é um projeto
+Compose separado (`duplicata-monitoramento`): não combine seus arquivos com `-f`
+nem use seus comandos para administrar o PostgreSQL.
+
+### Verificar o acesso antes de iniciar a coleta
+
+```powershell
+docker context show
+docker info --format '{{.OSType}}'
+docker version
+Get-NetTCPConnection -State Listen -LocalPort 8080,8081 | Select-Object LocalAddress,LocalPort
+```
+
+O modo deve ser `linux`; os dois listeners devem ser `127.0.0.1`. Provisione
+PostgreSQL, participantes Bearer, usuário/hash operacional e inicie as duas
+aplicações conforme os guias anteriores. Valide pelo Windows HTTP 401 sem Basic
+e 200 com a credencial própria de cada aplicação, com conteúdo Prometheus válido.
+Não envie credenciais na primeira sonda do container:
+
+```powershell
+foreach ($porta in 8080,8081) {
+  "GET /actuator/prometheus HTTP/1.1`r`nHost: host.docker.internal:$porta`r`nConnection: close`r`n`r`n" |
+    docker run --rm -i --read-only --cap-drop ALL --security-opt no-new-privileges --user 65534:65534 --entrypoint /bin/busybox postgres:18-alpine nc -w 5 host.docker.internal $porta
+}
+```
+
+Esse cliente TCP descartável não usa proxy nem recebe segredos. Cada resposta
+deve ser HTTP 401 com `WWW-Authenticate: Basic realm="metricas"`. Confira também
+DNS (`busybox nslookup host.docker.internal`), o corpo/caminho e a chegada da
+requisição à JVM correta (contador HTTP 401 ou logs privados). `localhost` no
+container não é o Windows. Em falha, investigue DNS, TCP, proxy e Docker Desktop;
+interrompa a coleta para revisão arquitetural se não houver acesso seguro.
+Não amplie o bind, abra firewall, crie proxy na LAN ou desative autenticação.
+
+### Provisionar arquivos privados
+
+O Prometheus precisa da **senha original**, correspondente ao BCrypt externo da
+aplicação. Gere pares independentes pelo procedimento da
+[4.4.1](../../docs/observabilidade.md#geração-de-credenciais-locais).
+Os quatro arquivos abaixo não têm exemplos funcionais nem valores padrão.
+Confira a exclusão do Git **antes de criá-los**:
+
+```powershell
+git check-ignore infra/local/.env.monitoramento/financiamento.usuario infra/local/.env.monitoramento/financiamento.senha infra/local/.env.monitoramento/signataria.usuario infra/local/.env.monitoramento/signataria.senha
+```
+
+Os quatro caminhos devem aparecer na saída (regra existente `.env.*`). Pare se
+algum não estiver ignorado. Em sessão PowerShell privada, sem transcrição:
+
+```powershell
+$pastaMetricas = Join-Path (Get-Location) 'infra/local/.env.monitoramento'
+$destinosMetricas = @(
+  $pastaMetricas
+  (Join-Path $pastaMetricas 'financiamento.usuario')
+  (Join-Path $pastaMetricas 'financiamento.senha')
+  (Join-Path $pastaMetricas 'signataria.usuario')
+  (Join-Path $pastaMetricas 'signataria.senha')
+)
+foreach ($destino in $destinosMetricas) {
+  if (Test-Path -LiteralPath $destino -ErrorAction Stop) {
+    throw 'Provisionamento inicial abortado: pasta ou arquivo privado ja existe. Use o procedimento de rotacao deliberada.'
+  }
+}
+New-Item -ItemType Directory -Path $pastaMetricas -ErrorAction Stop | Out-Null
+$identidadeLocal = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+icacls $pastaMetricas /inheritance:r /grant:r ($identidadeLocal + ':(OI)(CI)F') 'SYSTEM:(OI)(CI)F' | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Nao foi possivel restringir a pasta privada' }
+foreach ($aplicacao in 'financiamento','signataria') {
+  $credencialMetricas = Get-Credential -Message "Credencial operacional de $aplicacao"
+  [IO.File]::WriteAllText((Join-Path $pastaMetricas "$aplicacao.usuario"), $credencialMetricas.UserName, [Text.UTF8Encoding]::new($false))
+  [IO.File]::WriteAllText((Join-Path $pastaMetricas "$aplicacao.senha"), $credencialMetricas.GetNetworkCredential().Password, [Text.UTF8Encoding]::new($false))
+}
+Remove-Variable credencialMetricas
+```
+
+O provisionamento inicial aborta antes de criar ou gravar qualquer destino se
+a pasta privada ou algum dos quatro arquivos já existir. Não remova essa guarda
+para reutilizar o exemplo como rotação.
+
+**Rotação deliberada:** planeje separadamente a atualização da senha do job e do
+hash BCrypt externo da respectiva aplicação, preservando ACL e acesso somente
+leitura no container. Reinicie a aplicação com o novo hash, confirme o retorno
+do target a `UP` e mantenha a outra credencial independente. Não execute o
+procedimento inicial sobre um provisionamento existente.
+
+Não use `Get-Content`, `cat` ou inspeção de
+ambiente para publicar esses arquivos. Não coloque senhas em comandos, URLs,
+logs compartilhados, commits ou relatórios. Esses secrets Compose são arquivos
+locais em texto claro, montados somente para leitura; não são um cofre criptografado.
+
+### Validar, iniciar e consultar
+
+```powershell
+docker compose -f infra/local/docker-compose.monitoramento.yml config --quiet
+docker compose -f infra/local/docker-compose.monitoramento.yml run --rm --no-deps --entrypoint /bin/promtool prometheus check config /etc/prometheus/prometheus.yml
+docker compose -f infra/local/docker-compose.monitoramento.yml up -d prometheus
+curl.exe --noproxy '*' --fail http://127.0.0.1:9090/-/ready
+curl.exe --noproxy '*' --fail http://127.0.0.1:9090/api/v1/targets
+curl.exe --noproxy '*' --fail --get --data-urlencode 'query=up' http://127.0.0.1:9090/api/v1/query
+```
+
+Use `http://127.0.0.1:9090/targets` ou a API: `banco-dup` e `signataria` devem
+ter `health=up`, `lastError` vazio e `up=1`. Aguarde até dois intervalos de coleta
+após inicialização/recuperação. Não exponha a UI/API do Prometheus à LAN: ela não
+possui autenticação neste ambiente local.
+
+| Configuração | Valor |
+|---|---|
+| Imagem oficial fixa | `prom/prometheus:v3.13.5` |
+| Processo | UID/GID `65534:65534`, sem privilégios/capabilities adicionais |
+| Publicação no Windows | `127.0.0.1:9090:9090` |
+| Rede | Bridge própria `duplicata-monitoramento_monitoramento` |
+| Volume de séries | `duplicata-monitoramento_prometheus-data` → `/prometheus` |
+| Configuração somente leitura | `infra/local/prometheus/prometheus.yml` → `/etc/prometheus/prometheus.yml` |
+| Coleta / timeout | 15s / 5s |
+| Jobs / targets | `banco-dup` → `host.docker.internal:8080`; `signataria` → `host.docker.internal:8081` |
+| Caminho | `/actuator/prometheus`, sem seguir redirecionamentos |
+| Basic por job | `username_file` e `password_file` próprios em `/run/secrets/` |
+| Labels estáticos | `aplicacao` e `ambiente=local`, além de `job`/`instance` |
+
+O processo não precisa de root para ler os arquivos; `promtool` deve passar
+executado pelo próprio serviço. No Windows, a projeção de permissões de bind
+mounts é do Docker Desktop; valide novamente ao trocar de ambiente. O servidor
+Prometheus escuta na rede interna do container; somente a publicação no host é
+loopback. Isso não torna a rede Docker uma fronteira contra administradores do host.
+
+Para parar temporariamente ou remover somente o container/rede de monitoramento:
+
+```powershell
+docker compose -f infra/local/docker-compose.monitoramento.yml stop prometheus
+docker compose -f infra/local/docker-compose.monitoramento.yml start prometheus
+# Alternativa: remove container/rede, preservando as series no volume
+docker compose -f infra/local/docker-compose.monitoramento.yml down
+```
+
+Não use `down -v`: isso apaga o histórico de séries. O PostgreSQL e seu volume
+não são alterados por esses comandos. Encerre as aplicações em seus terminais
+separadamente. O build e os dez testes verticais não dependem deste Compose nem
+de arquivos de credenciais operacionais. Consulte
+[métricas, testes negativos e limitações](../../docs/observabilidade.md#coleta-prometheus--entrega-442).
+
+## Grafana — Entrega 4.4.3
+
+**Aprovada tecnicamente após inspeção visual manual pelo responsável.** A 4.4 está
+completa funcionalmente na feature branch, ainda não integrada à `main`, com
+revisão consolidada local aprovada. O mesmo Compose acrescenta somente Grafana
+OSS 13.3.1; o serviço Prometheus e o Compose PostgreSQL permanecem preservados.
+
+O responsável confirmou os dois dashboards funcionando corretamente; a inspeção
+não foi realizada pelo Computer Use. Permanecem aprovadas as 28 consultas PromQL,
+os seis testes nativos e os 324 testes Gradle (125 do Banco DUP, 199 da Signatária,
+incluindo dez verticais), sem falhas, erros ou ignorados. Após nova validação local,
+os seis testes PromQL foram integrados ao workflow existente, no job obrigatório
+`Build e testes` (`build-test`), com `promtool` da imagem `prom/prometheus:v3.13.5`,
+sem secrets ou serviços. O histórico Gradle foi preservado, sem repetir o build
+nesta mudança de workflow/documentação. O CI remoto ainda não foi validado e
+a entrega não está integrada à `main`.
+
+### Senha administrativa inicial
+
+Primeiro provisione os quatro arquivos Prometheus e a pasta com ACL privada
+conforme a 4.4.2. O novo arquivo abaixo é independente de Basic/Bearer de negócio.
+Confira a exclusão do Git antes de criá-lo:
+
+```powershell
+git check-ignore infra/local/.env.monitoramento/grafana-admin.senha
+```
+
+Se o caminho não aparecer, interrompa. Execute em sessão privada sem transcrição:
+
+```powershell
+$pastaMetricas = Join-Path (Get-Location) 'infra/local/.env.monitoramento'
+$arquivoGrafana = Join-Path $pastaMetricas 'grafana-admin.senha'
+if (-not (Test-Path -LiteralPath $pastaMetricas -PathType Container)) {
+  throw 'Provisione primeiro a pasta privada e os secrets da 4.4.2'
+}
+if (Test-Path -LiteralPath $arquivoGrafana) {
+  throw 'Destino ja existe; nao sobrescrever. Use rotacao deliberada.'
+}
+$bytesGrafana = New-Object byte[] 32
+$rngGrafana = [Security.Cryptography.RandomNumberGenerator]::Create()
+try { $rngGrafana.GetBytes($bytesGrafana) } finally { $rngGrafana.Dispose() }
+$senhaGrafana = [Convert]::ToBase64String($bytesGrafana).TrimEnd('=').Replace('+','-').Replace('/','_')
+$streamGrafana = [IO.File]::Open($arquivoGrafana, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+$writerGrafana = [IO.StreamWriter]::new($streamGrafana, [Text.UTF8Encoding]::new($false))
+try { $writerGrafana.Write($senhaGrafana) } finally { $writerGrafana.Dispose() }
+Remove-Variable senhaGrafana,bytesGrafana
+```
+
+`CreateNew` também impede sobrescrita em corrida. O arquivo herda a ACL privada
+da pasta; não há senha padrão no YAML. Ele é montado somente leitura, legível
+pelo UID 472 do Grafana. O entrypoint exige arquivo regular com conteúdo não
+branco antes do
+suporte oficial `GF_SECURITY_ADMIN_PASSWORD__FILE`; a guarda também impede
+fallback se o Docker transformar caminho ausente em diretório.
+
+### Iniciar e acessar
+
+As duas aplicações continuam no Windows em `local,monitoramento`. Execute:
+
+```powershell
+docker compose -f infra/local/docker-compose.monitoramento.yml config --quiet
+docker compose -f infra/local/docker-compose.monitoramento.yml up -d prometheus grafana
+curl.exe --noproxy '*' --fail http://127.0.0.1:3000/api/health
+```
+
+Acesse `http://127.0.0.1:3000`, usuário **operador-grafana**, com a senha do arquivo
+privado. Consulte-a somente em ferramenta local privada, sem copiar para logs,
+histórico compartilhado, JSONs ou relatórios. A API de health é pública; dashboards
+e APIs de dados exigem autenticação. Acesso anônimo e cadastro público estão
+desabilitados, assim como telemetria de uso, verificações externas de atualização
+e pré-instalação de plugins. Não foram adicionados plugins externos.
+
+Na pasta **Duplicata local**, abra:
+
+- `http://127.0.0.1:3000/d/duplicata-saude` — Saúde e integração;
+- `http://127.0.0.1:3000/d/duplicata-operacoes` — Operações de Duplicatas.
+
+Os arquivos `grafana/provisioning/datasources/prometheus.yml` e
+`grafana/provisioning/dashboards/duplicata.yml` provisionam o datasource de UID
+`duplicata-prometheus` (`http://prometheus:9090`) e os dois JSONs em
+`grafana/dashboards/`. Não há importação manual, acesso SQL ou token de participante.
+As definições são mantidas no Git; edição pela UI está desabilitada para evitar
+divergência. O volume `duplicata-monitoramento_grafana-data` preserva o SQLite,
+contas e preferências; as séries continuam no volume separado do Prometheus.
+
+### Rotação deliberada com volume persistente
+
+A senha inicial é gravada no banco do Grafana somente na criação original.
+Alterar o arquivo `__FILE` e reiniciar **não** altera a senha de uma conta já
+existente. Troque-a conscientemente pela UI autenticada e atualize o arquivo
+privado, ou use o CLI oficial com a nova senha por stdin, nunca por argumento:
+
+```powershell
+# Depois de atualizar deliberadamente o arquivo privado com a nova senha
+$arquivoGrafana = Join-Path (Get-Location) 'infra/local/.env.monitoramento/grafana-admin.senha'
+[IO.File]::ReadAllText($arquivoGrafana) | docker compose -f infra/local/docker-compose.monitoramento.yml exec -T grafana grafana cli --homepath /usr/share/grafana --config /etc/grafana/grafana.ini admin reset-admin-password --password-from-stdin
+```
+
+O CLI atualiza o banco no volume. Valide um novo login e encerre sessões antigas;
+não remova o volume para trocar a senha. O procedimento inicial não é rotação.
+
+### Verificar e encerrar
+
+Confirme os dois targets `UP` em `http://127.0.0.1:9090/targets`. No Grafana, a
+API autenticada `/api/datasources/uid/duplicata-prometheus/health` deve retornar
+`status=OK`; `/api/search?type=dash-db` deve listar os dois dashboards e
+`/api/dashboards/uid/{uid}` deve informar `meta.provisioned=true`. A execução dos
+painéis é verificável por `/api/ds/query`. HTTP 200 de `/api/health` isolado não
+comprova o datasource nem os gráficos.
+
+```powershell
+$validacaoGrafana = Join-Path (Get-Location) 'infra/local/grafana/tests'
+docker run --rm --network none --mount "type=bind,source=$validacaoGrafana,target=/validacao,readonly" --entrypoint /bin/promtool prom/prometheus:v3.13.5 test rules /validacao/indicadores.test.yml
+docker compose -f infra/local/docker-compose.monitoramento.yml stop grafana prometheus
+docker compose -f infra/local/docker-compose.monitoramento.yml start prometheus grafana
+```
+
+Não use `down -v`. Reiniciar Grafana preserva o banco e recarrega os arquivos
+provisionados; reiniciar Prometheus preserva as séries. Se uma aplicação parar,
+`up` cai; após retomá-la em `local,monitoramento`, aguarde dois intervalos de
+scrape. Sem operações recentes ou com menos de 20 consultas bem-sucedidas/15min,
+o p95 fica sem dados. O build não requer nenhum desses backends.
+
+Os listeners Windows 3000/8080/8081/9090 devem continuar em `127.0.0.1`. HTTP e
+secrets em arquivos são uma solução exclusivamente local, com host/Docker
+confiáveis. Não publique em LAN. Definições, consultas, ensaios e limitações:
+[Grafana e confiabilidade](../../docs/observabilidade.md#grafana-e-confiabilidade--entrega-443).

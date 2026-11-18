@@ -4,11 +4,20 @@ Este documento acompanha as entregas incrementais da plataforma experimental de 
 
 O progresso é registrado com base nas implementações conhecidas. Uma funcionalidade implementada ainda pode depender de Code Review, execução dos testes e homologação técnica para ser considerada concluída.
 
-**Última atualização de referência:** 13/11/2026.
+**Última atualização de referência:** 18/11/2026.
 
 ## Estado atual
 
 **Entrega 4.3 — aprovada técnica e operacionalmente em 13/11/2026; PR #1 integrado em `482b7f5`, com CI pós-merge aprovado e proteção da `main` ativa.** A 4.2 foi aprovada tecnicamente em 13/11/2026 e versionada em `54357e8`. A 4.1 permanece versionada em `03290c8` e a 3.4 em `27e950e`.
+
+A **4.4.1 está aprovada e versionada em `a2dde54` na feature branch
+`feat/4.4-monitoramento`, ainda não integrada à `main`**. A 4.4.2 está aprovada
+tecnicamente em Code Review na mesma branch,
+ainda não integrada à `main`, e a 4.4.3 está aprovada tecnicamente após inspeção
+visual manual pelo responsável. A 4.4 está completa funcionalmente na feature
+branch, com os três incrementos aprovados na revisão consolidada local e seis
+testes PromQL integrados ao workflow após validação local. O CI remoto da 4.4
+ainda não foi validado e a entrega não está integrada à `main`.
 
 | Entrega | Descrição                                 | Situação                          |
 | ------- | ----------------------------------------- | --------------------------------- |
@@ -22,7 +31,7 @@ O progresso é registrado com base nas implementações conhecidas. Uma funciona
 | 4.1     | OpenAPI e Swagger UI                      | Aprovada tecnicamente em 13/11/2026; versionada em `03290c8` |
 | 4.2     | Observabilidade                          | Aprovação técnica final em 13/11/2026; versionada em `54357e8` |
 | 4.3     | CI com GitHub Actions                     | Aprovada técnica e operacionalmente em 13/11/2026; integrada em `482b7f5` |
-| 4.4     | Monitoramento                            | Planejada |
+| 4.4     | Monitoramento                            | Três incrementos aprovados na revisão consolidada local; inspeção visual manual confirmada; seis testes PromQL integrados ao CI; CI remoto não validado; não integrada à `main` |
 | 4.5     | CD                                       | Planejada; estratégia de deploy a definir |
 
 ---
@@ -398,7 +407,8 @@ bloqueia force push e exclusão, sem bypass. O README inclui o badge oficial
 do workflow para `main`.
 
 Limitação: uma execução pós-merge validada; a estabilidade futura será acompanhada
-pelas execuções recorrentes do CI. As entregas 4.4 e 4.5 permanecem planejadas e não iniciadas.
+pelas execuções recorrentes do CI. Naquele encerramento, as entregas 4.4 e 4.5
+permaneciam planejadas e não iniciadas.
 
 Validação local em 13/11/2026: YAML analisado com SnakeYAML 2.6 já disponível no cache
 Gradle, com asserções de eventos, job, SHAs, permissões, cache, Wrapper e caminhos
@@ -413,12 +423,117 @@ não havia commit, push ou PR; o encerramento remoto posterior está registrado 
 
 ## Planejamento restante da Fase 4
 
-Sequência aprovada; as entregas abaixo permanecem planejadas e não foram iniciadas.
+Sequência aprovada; a 4.4.1 está aprovada tecnicamente e em Code Review e versionada
+em `a2dde54` na feature branch, ainda não integrada à `main`. Com a aprovação da
+4.4.3 e da revisão consolidada local, os três incrementos da 4.4 estão aprovados
+localmente. O CI remoto da 4.4 ainda não foi validado.
 
 ### 4.4 — Monitoramento
 
-- Prometheus e Grafana.
-- Dashboards e SLIs/SLOs.
+- **4.4.1 — Exposição segura de métricas: aprovada tecnicamente e em Code Review, versionada em `a2dde54` na feature branch, não integrada à `main`.** Registry Prometheus nas
+  duas aplicações, perfil opt-in `local,monitoramento`, bind em loopback e Basic
+  operacional isolado. Preserva Bearer, Swagger, métricas da 4.2 e CI da 4.3.
+  Não exige backend de monitoramento para executar/testar.
+- **4.4.2 — Coleta Prometheus: aprovada tecnicamente em Code Review na feature branch, não integrada à `main`.** Compose
+  independente com Prometheus 3.13.5, volume persistente, porta 9090 em loopback,
+  secrets locais e dois jobs com intervalo de 15s/timeout de 5s. A prova prévia
+  Docker Desktop → Windows alcançou ambas as aplicações em loopback por
+  `host.docker.internal`, sem alterar a segurança da 4.4.1.
+- **4.4.3 — Grafana e confiabilidade: aprovada tecnicamente após inspeção visual manual pelo responsável.**
+  Grafana OSS 13.3.1 com senha privada, interface loopback, datasource e dois
+  dashboards provisionados. Histogramas seletivos e referências experimentais
+  de 99% técnico/p95 de consulta até 2s, com ausência de tráfego e volume mínimo
+  tratados explicitamente. Os dois dashboards foram confirmados funcionando pelo
+  responsável. A 4.4 está completa funcionalmente na feature branch, não integrada
+  à `main`, com revisão consolidada local aprovada e CI remoto ainda não validado.
+
+A feature branch única é `feat/4.4-monitoramento`, base
+`bab506f759e7fe6991776876f3178cb9f43ad040`. O PR #2 foi integrado nesse commit;
+seu [CI pós-merge](https://github.com/Lildtz/duplicata-escritural-financiamento/actions/runs/43537039475)
+confirmou 277 testes, incluindo dez verticais, sem falhas, erros ou ignorados, em
+Ubuntu 24.04, com artefatos JUnit/HTML publicados. Ruleset `27240150` ativo.
+Esse é o baseline anterior à 4.4.1, não o total da nova cobertura.
+Procedimentos e limites: [observabilidade](observabilidade.md#exposição-prometheus-local--entrega-441).
+
+Validação inicial da 4.4.1 em 17/11/2026: `clean build --console=plain` aprovado
+em 3min12s, com 302 testes (114 do Banco DUP e 188 da Signatária), incluindo os
+dez verticais, sem falhas, erros ou ignorados. Cobertura acrescida em 25 testes.
+Esse resultado registra a primeira implementação, anterior à correção do bypass.
+
+Última validação da 4.4.1: `clean build --console=plain` aprovado em **2min43s**,
+com **322 testes** (124 do Banco DUP e 198 da Signatária), incluindo os
+**10 testes verticais**, com zero falhas, erros ou ignorados.
+São **45 testes adicionados** desde o baseline de 277.
+
+O bypass por remapeamento do Actuator foi reproduzido e sua correção fail-closed
+validada com HTTP real nas duas aplicações. Configurações incompatíveis de rotas
+e de servidor de gerenciamento são rejeitadas na inicialização do monitoramento.
+Os dois Code Reviews foram favoráveis; a 4.4.1 está aprovada tecnicamente e em
+Code Review na feature branch `feat/4.4-monitoramento`, ainda não integrada à
+`main`. `git diff --check` sem erros. Naquele encerramento da 4.4.1, a 4.4 ainda
+estava incompleta.
+
+Validação operacional da 4.4.2 em 17/11/2026: os dois jobs ficaram `UP`, sem erro
+de autenticação. Métricas JVM/HTTP de ambas as aplicações, HTTP cliente do Banco
+DUP e JDBC da Signatária foram consultadas no Prometheus. Uma Escrituração real
+chegou a CONCLUIDO; operações dos beans do Banco DUP usaram o RestClient real e
+uma nova consulta elevou o contador coletado de 2 para 3. Dados e credenciais
+efêmeros ficaram restritos ao ambiente de prova, sem endpoints novos.
+
+Senha incorreta derrubou somente o respectivo job com HTTP 401, nas duas
+aplicações; restauração recuperou `UP`. Aplicação parada produziu conexão recusada;
+sem `monitoramento` não houve exportação; reinicialização com o perfil recuperou
+a coleta. Listeners 8080/8081/9090 permaneceram em `127.0.0.1`, com sondas TCP aos
+IPs Ethernet/Wi-Fi sem conexão e endpoints sensíveis bloqueados. Não houve
+alteração de firewall, cadeia de segurança, domínio, migrations ou CI.
+
+Compose e `promtool check config` aprovados, incluindo leitura dos secrets pelo
+UID 65534. Procedimentos e limites da prova estão no
+[guia de coleta](observabilidade.md#coleta-prometheus--entrega-442). A 4.4.2 está
+aprovada tecnicamente em Code Review na feature branch, ainda não integrada à
+`main`. Grafana e confiabilidade são acrescentados separadamente pela 4.4.3.
+
+Build completo da 4.4.2: `.\gradlew.bat clean build --console=plain` aprovado em
+**3min**, com o Prometheus parado. XMLs confirmaram **322/322 testes**: 124 do
+Banco DUP e 198 da Signatária, incluindo os **10 verticais**, com zero falhas,
+erros ou ignorados. Nenhum teste ou código das aplicações foi alterado.
+
+Validação integrada da 4.4.3: datasource saudável via API, dois dashboards com
+`provisioned=true` e 28 consultas PromQL aprovadas pelo `promtool` e consultadas
+pela API de dados do Grafana. Trinta novas consultas elevaram o contador Banco
+DUP de 1 para 31. Escrituração real produziu CONCLUIDO e rejeição confirmada
+por Duplicata já escriturada. O p95 apareceu apenas após amostras suficientes.
+Parada da Signatária foi refletida como `up=0` no Grafana; uma chamada real do
+Banco DUP registrou INDISPONIVEL. Após reinício, `up=1` e integração recuperada.
+Senha inicial privada, autenticação obrigatória e persistência após reinício
+foram comprovadas sem excluir volumes. Dois novos testes HTTP de buckets e
+seis testes nativos PromQL verificam a instrumentação e os indicadores.
+Procedimentos, limites e resultados completos estão no
+[guia de observabilidade](observabilidade.md#grafana-e-confiabilidade--entrega-443).
+
+Build da 4.4.3: `clean build --console=plain` aprovado em **4min25s**, com ambos
+os backends de monitoramento parados. XMLs confirmaram **324/324 testes**: 125
+do Banco DUP e 199 da Signatária, incluindo **10 verticais**, zero falhas,
+erros ou ignorados. São dois testes HTTP adicionais sobre o baseline de 322,
+além dos seis casos PromQL nativos. A aprovação técnica final da 4.4.3 foi
+confirmada após inspeção visual manual do responsável, que atestou o funcionamento
+dos dashboards Saúde e integração e Operações de Duplicatas. O Computer Use não
+realizou essa inspeção e não há screenshots automatizados dessa validação.
+
+**Revisão consolidada local em 18/11/2026:** os três incrementos foram aprovados,
+sem achados que exijam alterar a infraestrutura funcional. A inspeção visual dos
+dois dashboards permanece confirmada manualmente pelo responsável.
+Os seis testes PromQL passaram novamente com `prom/prometheus:v3.13.5` e foram
+integrados ao job obrigatório `build-test`, nome `Build e testes`, no workflow
+existente. A execução usa `promtool test rules` em container descartável, sem
+rede, secrets ou serviços, e falha o job em caso de erro. Java 21, Gradle,
+cache, resumo e publicação dos relatórios JUnit permanecem preservados.
+Workflow validado com `actionlint 1.7.12`; as seis expressões de teste coincidem
+com as dos dashboards. `git diff --check` aprovado e nenhum segredo adicionado.
+Preserva-se o histórico de **324/324 testes Gradle**, incluindo dez verticais,
+e **seis testes PromQL**; o build Gradle não foi repetido por não haver mudanças
+Java ou na execução de seus testes. O **CI remoto ainda não foi validado**;
+a entrega **não está integrada à `main`**. Esta revisão não criou commit, push ou PR.
 
 ### 4.5 — CD
 

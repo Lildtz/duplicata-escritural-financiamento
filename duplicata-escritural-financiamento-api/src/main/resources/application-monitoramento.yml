@@ -1,0 +1,26 @@
+server:
+  address: 127.0.0.1
+
+financiamento:
+  monitoramento:
+    usuario: ${FINANCIAMENTO_METRICAS_USUARIO:}
+    senha-hash: ${FINANCIAMENTO_METRICAS_SENHA_HASH:}
+
+management:
+  metrics:
+    distribution:
+      percentiles-histogram:
+        financiamento.registradora.operacao: true
+      minimum-expected-value:
+        financiamento.registradora.operacao: 1ms
+      maximum-expected-value:
+        financiamento.registradora.operacao: 10s
+      slo:
+        financiamento.registradora.operacao: 2s
+  endpoint:
+    prometheus:
+      access: read-only
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus

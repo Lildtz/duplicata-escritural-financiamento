@@ -198,3 +198,584 @@ Versionamento autorizado e registrado em `54357e8`. Nenhum backend externo de
 monitoramento foi validado; utilizou-se somente o receptor OTLP efêmero de teste.
 No aceite da 4.2, as entregas 4.3, 4.4 e 4.5 ainda estavam planejadas; o estado
 atual está no [roadmap](roadmap.md).
+
+## Exposição Prometheus local — Entrega 4.4.1
+
+**Situação: 4.4.1 aprovada tecnicamente e em Code Review, versionada em `a2dde54`
+na feature branch `feat/4.4-monitoramento`, ainda não integrada à `main`.
+Na aprovação da 4.4.1, a Entrega 4.4 ainda estava incompleta.**
+
+As duas aplicações usam `micrometer-registry-prometheus`, com versão gerenciada
+pelo Spring Boot 4.1.1. O registry exporta os medidores da 4.2, sem novos contadores,
+buckets ou exportação OTLP adicional. O build não exige Prometheus/Grafana.
+
+### Perfis e credenciais externas
+
+Ative explicitamente `local,monitoramento`. O perfil de monitoramento:
+
+- mantém as portas 8080 (Banco DUP) e 8081 (Signatária);
+- exige `local` e bind em `127.0.0.1`; override amplo de endereço é rejeitado;
+- exige `management.endpoints.web.base-path=/actuator` e
+  `management.endpoints.web.path-mapping.prometheus=prometheus` (valores padrão);
+  remapeamentos são rejeitados na inicialização;
+- não aceita definir `management.server.port` ou `management.server.address`,
+  mesmo com valores iguais aos principais; o gerenciamento usa o servidor existente;
+- habilita somente o endpoint adicional `/actuator/prometheus`;
+- falha na inicialização se faltar usuário/hash ou se a configuração for inválida;
+- aceita usuário de 3–64 caracteres ASCII: letras, números, ponto, hífen e sublinhado,
+  começando por letra ou número;
+- aceita hash BCrypt `$2a$`, `$2b$` ou `$2y$`, com custo de 10 a 14.
+  O limite superior mantém o custo de autenticação local controlado.
+
+| Aplicação | Variável externa | Propriedade equivalente |
+|---|---|---|
+| Banco DUP | `FINANCIAMENTO_METRICAS_USUARIO` | `financiamento.monitoramento.usuario` |
+| Banco DUP | `FINANCIAMENTO_METRICAS_SENHA_HASH` | `financiamento.monitoramento.senha-hash` |
+| Signatária | `SIGNATARIA_METRICAS_USUARIO` | `signataria.monitoramento.usuario` |
+| Signatária | `SIGNATARIA_METRICAS_SENHA_HASH` | `signataria.monitoramento.senha-hash` |
+
+Não existem valores padrão de credenciais. Use usuário e senha diferentes em cada
+aplicação. Carregue as variáveis de forma privada no ambiente do processo, ou use
+um YAML externo via `SPRING_CONFIG_ADDITIONAL_LOCATION`. Arquivos `.env.*` são
+ignorados pelo Git; não são carregados automaticamente pelo Spring.
+Não passe senha/hash nos argumentos do Gradle nem versione sua saída.
+
+As identidades Bearer e o token de integração continuam necessários para os casos
+de uso de negócio. O operador Basic não é Sacador nem Financiador; seu provider de
+autenticação existe apenas dentro da cadeia Prometheus.
+
+### Geração de credenciais locais
+
+Após resolver as dependências pelo Wrapper, use o BCrypt já fornecido pelo Spring
+Security, sem instalar ferramenta ou adicionar script ao projeto. No PowerShell:
+
+```powershell
+$cryptoJar = Get-ChildItem "$env:USERPROFILE/.gradle/caches/modules-2/files-2.1/org.springframework.security/spring-security-crypto/7.1.1" -Recurse -Filter 'spring-security-crypto-7.1.1.jar' | Select-Object -First 1 -ExpandProperty FullName
+jshell --class-path "$cryptoJar"
+```
+
+Na sessão local do JShell:
+
+```java
+import java.security.SecureRandom;
+import java.util.Base64;
+import org.springframework.security.crypto.bcrypt.BCrypt;
+byte[] bytes = new byte[32];
+new SecureRandom().nextBytes(bytes);
+String senha = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+String hash = BCrypt.hashpw(senha, BCrypt.gensalt(10));
+System.out.println("Senha aleatoria: " + senha);
+System.out.println("Hash BCrypt correspondente: " + hash);
+```
+
+A senha e o hash exibidos são privados e temporários. Guarde o hash na configuração
+externa da aplicação e a senha apenas no cliente operacional; não reutilize Bearers.
+Não copie senhas, hashes ou saídas privadas dessa sessão para commits, logs
+compartilhados ou relatórios.
+Repita a geração para a outra aplicação. Os testes automatizados geram seus
+próprios segredos aleatórios; não há senhas reais ou hashes fixos nos testes.
+
+Depois do provisionamento privado e da configuração Bearer já documentada:
+
+```powershell
+.\gradlew.bat :duplicata-escritural-financiamento-api:bootRun "--args=--spring.profiles.active=local,monitoramento"
+.\gradlew.bat :duplicata-escritural-signataria-api:bootRun "--args=--spring.profiles.active=local,monitoramento"
+```
+
+Execute cada aplicação em seu terminal. A Signatária continua exigindo PostgreSQL
+e o arquivo externo de participantes; siga o [guia local](../infra/local/README.md).
+Para inspecionar o scrape sem gravar a senha no histórico:
+
+```powershell
+$credencialMetricas = Get-Credential -Message 'Credencial operacional da aplicacao'
+Invoke-WebRequest -Uri 'http://127.0.0.1:8080/actuator/prometheus' -Headers @{
+  Authorization = 'Basic ' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(
+    $credencialMetricas.UserName + ':' + $credencialMetricas.GetNetworkCredential().Password))
+}
+Remove-Variable credencialMetricas
+```
+
+Use 8081 e a outra credencial para a Signatária. HTTP Basic não cifra o tráfego;
+este perfil serve exclusivamente à máquina local. Não publique na LAN.
+
+### Contrato de acesso e compatibilidade
+
+| Caminho | Com monitoramento | Sem monitoramento |
+|---|---|---|
+| `GET /actuator/prometheus` | Basic correto: 200; ausente/incorreto/Bearer: 401 | Não exposto |
+| Outros métodos em `/actuator/prometheus` | Basic correto: 403 | Não expostos |
+| `/actuator/health`, `/actuator/info` | Públicos como antes | Públicos como antes |
+| Signatária `/actuator/metrics[/nome]` | Mantém Bearer de participante em local | Mantém regra da 4.2 |
+| Signatária APIs de negócio | Mantêm Bearer e papéis; Basic recebe 401 | Regras anteriores |
+| Swagger da Signatária | Público em local | Regra da 4.1 |
+| `env`, `beans`, `configprops`, `heapdump`, `loggers` | Não expostos/liberados | Não expostos/liberados |
+
+A cadeia Prometheus tem precedência (`@Order(1)`), permite apenas GET no caminho
+exato e não executa `FiltroTokenLocal`. Usa Basic nativo, BCrypt e sessão
+`STATELESS`. Não cria login ou usuário padrão.
+No Banco DUP, a cadeia complementar preserva a descoberta do Actuator,
+`health,info` e os 404 de rotas inexistentes. Não autentica Basic globalmente.
+A configuração de filtros depende de contexto servlet; os testes verticais continuam
+iniciando o Banco DUP sem servidor HTTP e sem credenciais operacionais.
+
+### Restrição de rotas e servidor de gerenciamento
+
+A revisão de segurança reproduziu, antes da correção, o seguinte comportamento
+com HTTP real em `local,monitoramento`:
+
+| Configuração externa | Banco DUP sem Basic | Signatária sem Basic |
+|---|---|---|
+| Base `/manage`: `/manage/prometheus` | 200 com métricas | 401 |
+| Mapeamento `scrape`: `/actuator/scrape` | 404 | 401 |
+| Base `/actuator/health` ou mapeamento `health/prometheus` | 200 com métricas | 200 com métricas |
+| Porta separada, caminho padrão, endereço de teste em loopback | 401; Basic correto: 200 | 401; Basic correto: 200 |
+| Somente `management.server.address`, sem porta separada | Falha nativa de inicialização | Falha nativa de inicialização |
+
+Com porta separada, ambas aceitaram scrape autenticado em `127.0.0.2`, embora o
+servidor principal usasse `127.0.0.1`. No Banco DUP, combinar esse servidor com
+base `/manage` também retornou métricas sem Basic. As sondas ficaram exclusivamente
+em loopback; não foi aberto listener na LAN nem comprovada exposição por ela.
+
+A correção rejeita configurações incompatíveis no construtor de segurança do
+monitoramento, antes de servir HTTP, sem alterar as cadeias Bearer ou HTTP geral.
+Os testes iniciam as aplicações reais e verificam a falha controlada e a recusa de
+conexão nas portas principal e de gerenciamento. A restrição não se aplica a
+perfis sem `monitoramento`.
+
+O matcher oficial `EndpointRequest` acompanha os caminhos efetivos do Actuator,
+mas não restringe porta/endereço. Como esta entrega exige um caminho fixo e o
+servidor existente, rejeitar overrides mantém o contrato menor que aceitar rotas
+dinâmicas e ainda validar o servidor separadamente. O matcher fixo só é usado
+depois dessa validação.
+
+Após a correção, o `clean build --console=plain` passou em 2min43s: **322 testes**
+(124 do Banco DUP e 198 da Signatária), incluindo os dez verticais, sem falhas,
+erros ou ignorados. O ajuste acrescentou 20 casos sobre os 302 anteriores:
+oito cenários de inicialização/HTTP e duas propriedades isoladas por aplicação.
+As regressões afetadas passaram com 124 testes do Banco DUP e 84 da seleção
+HTTP/configuração da Signatária. `git diff --check` aprovado; a 4.4.1 foi aprovada
+tecnicamente e em Code Review na feature branch, ainda não integrada à `main`.
+
+### Nomes exportados
+
+Os nomes Micrometer são convertidos para nomes Prometheus. As operações devem
+ser executadas antes de procurar os medidores criados sob demanda:
+
+| Medidor | Exportação |
+|---|---|
+| `financiamento.registradora.operacao` | `financiamento_registradora_operacao_seconds_count/sum/max` |
+| `signataria.operacao` | `signataria_operacao_seconds_count/sum/max` |
+| `signataria.escrituracao.transicoes` | `signataria_escrituracao_transicoes_total` |
+| HTTP | `http_client_requests_seconds_count`, `http_server_requests_seconds_count` |
+| JVM/threads | `jvm_memory_used_bytes`, `jvm_threads_live_threads` |
+| JDBC/Hikari (Signatária) | `jdbc_connections_max`, `hikaricp_connections` |
+
+Exemplos sanitizados ilustrativos; não representam contagem financeira:
+
+```text
+financiamento_registradora_operacao_seconds_count{error="none",motivo="nenhum",operacao="consultar_duplicatas",resultado="sucesso"} 1
+signataria_escrituracao_transicoes_total{estado="CONCLUIDO",motivo="nenhum"} 1
+```
+
+Os labels próprios existentes continuam finitos. Não há IDs, CNPJ, Bearers,
+senhas, hashes, Idempotency-Key ou valores financeiros nos labels próprios.
+Nenhum medidor adicional duplica os timers ou as transições da 4.2.
+
+### Verificação e próxima etapa
+
+```powershell
+.\gradlew.bat :duplicata-escritural-financiamento-api:test --tests '*MonitoramentoHttpTests' --tests '*ConfiguracaoMetricasTests' :duplicata-escritural-signataria-api:test --tests '*MonitoramentoHttpTests' --tests '*ConfiguracaoMetricasTests'
+.\gradlew.bat clean build --console=plain
+git diff --check
+```
+
+Os testes HTTP usam servidor real, credenciais efêmeras e, na Signatária,
+PostgreSQL/Testcontainers e worker real. Conferem exportação, isolamento Basic/Bearer,
+métodos negados, endpoints sensíveis, ausência de segredos e compatibilidade local.
+
+Validação inicial em 17/11/2026: 13 testes específicos do Banco DUP e 12 da
+Signatária aprovados. A regressão passou com 114 testes do Banco DUP (incluindo os
+dez verticais) e 74 na seleção HTTP/configuração da Signatária. O
+`clean build --console=plain` passou em 3min12s: **302 testes**, sendo 114 do
+Banco DUP e 188 da Signatária, sem falhas, erros ou ignorados. São 25 testes novos
+sobre o baseline de 277. Não havia Prometheus/Grafana em execução.
+`git diff --check` aprovado. Naquela validação inicial, ainda não havia commit,
+push, PR ou aceite final da 4.4.
+
+A conectividade Docker Desktop → Windows foi validada na 4.4.2, abaixo;
+`localhost` no container não aponta para o Windows. O bind em loopback isoladamente
+não comprova essa conectividade. Não ampliar o bind para contornar falha sem
+revisar a fronteira de segurança. Compose e scrape pertencem à 4.4.2; Grafana,
+dashboards, alertas e SLIs/SLOs permanecem fora da 4.4.1.
+
+Referências: [acesso/exposição do Actuator](https://docs.spring.io/spring-boot/reference/actuator/endpoints.html)
+e [cadeias de segurança](https://docs.spring.io/spring-security/reference/servlet/configuration/java.html).
+
+## Coleta Prometheus — Entrega 4.4.2
+
+**Situação: aprovada tecnicamente em Code Review na feature branch
+`feat/4.4-monitoramento`, ainda não integrada à `main`.** A 4.4.1 está aprovada
+e versionada em `a2dde54` na mesma branch. Com a aprovação da 4.4.3, a 4.4 está
+completa funcionalmente na feature branch, ainda não integrada à `main`, com
+revisão consolidada local aprovada, conforme a seção abaixo. O CI remoto da 4.4
+ainda não foi validado.
+
+### Infraestrutura e fronteira de rede
+
+O [Compose complementar](../infra/local/docker-compose.monitoramento.yml) executa
+somente a imagem oficial fixa `prom/prometheus:v3.13.5`, em rede própria e com
+volume persistente. Publica apenas `127.0.0.1:9090`. O Compose PostgreSQL, seus
+volumes e as duas aplicações no Windows permanecem independentes. Não há coletor
+OTLP adicional, Grafana, alertas, buckets ou alteração de medidores.
+
+A [configuração de scrape](../infra/local/prometheus/prometheus.yml) define:
+
+- `banco-dup` → `http://host.docker.internal:8080/actuator/prometheus`;
+- `signataria` → `http://host.docker.internal:8081/actuator/prometheus`;
+- intervalo de 15s, timeout de 5s e redirecionamentos desabilitados;
+- labels estáticos `aplicacao` e `ambiente=local`, com cardinalidade finita;
+- `basic_auth.username_file/password_file` independentes por job.
+
+Os arquivos privados de usuário/senha ficam em `infra/local/.env.monitoramento/`,
+ignorados pela regra `.env.*` existente, verificada antes da criação. São montados
+como secrets somente leitura em `/run/secrets`. O Prometheus precisa da senha
+original correspondente ao hash BCrypt externo da aplicação; Bearers não são
+usados no scrape. O processo UID/GID 65534 lê os arquivos sem privilégios. O
+sistema de arquivos raiz é somente leitura e somente o volume TSDB é gravável.
+Secrets Compose locais não criptografam arquivos em disco: mantenha ACL privada,
+não os copie para Git, logs ou relatórios e considere o host/Docker confiáveis.
+
+Provisionamento, comandos de inicialização/encerramento e consulta de targets:
+[guia de infraestrutura](../infra/local/README.md#coleta-prometheus--entrega-442).
+
+### Prova inicial antes do Compose
+
+Em 17/11/2026, Docker Desktop 4.91.0 (239619), Engine 29.8.0, contexto
+`desktop-linux`, Linux containers/WSL2. As aplicações iniciaram com
+`local,monitoramento`, PostgreSQL descartável e credenciais sintéticas privadas.
+No Windows, ambas responderam 401 sem Basic e 200 com o Basic próprio, com
+conteúdo Prometheus válido. Os listeners pertenciam às JVMs corretas e estavam
+exclusivamente em `127.0.0.1:8080/8081`.
+
+Um container Linux descartável, sem volumes ou credenciais e sem privilégios,
+resolveu `host.docker.internal` para `192.168.65.254` (também havia resposta IPv6).
+Uma requisição TCP/HTTP direta com BusyBox `nc`, sem proxy, comprovou:
+
+| Alvo no Windows | Resultado no container | Origem confirmada |
+|---|---|---|
+| Banco DUP :8080 | HTTP 401; `WWW-Authenticate: Basic realm="metricas", charset="UTF-8"` | Contador HTTP 401 da JVM: 4 → 5 |
+| Signatária :8081 | HTTP 401; mesmo desafio Basic | Contador HTTP 401 da JVM: 3 → 4 |
+
+Cada incremento foi correlacionado a uma única sonda anônima, lida por scrape
+autenticado no host. Os corpos/caminhos também corresponderam às aplicações,
+evitando confundir proxy com resposta nativa. Somente após esse gate foi criado
+o Compose. Não houve alteração de bind, firewall ou Spring Security.
+
+Essa evidência vale para o Docker Desktop testado; reexecute o gate em outra
+máquina/versão. A documentação do Docker explica
+[o endereço do host](https://docs.docker.com/desktop/features/networking/#i-want-to-connect-from-a-container-to-a-service-on-the-host),
+mas não substitui a prova com estes listeners loopback.
+
+### Coleta e operações reais
+
+`docker compose config --quiet` e `promtool check config` passaram. O próprio
+UID 65534 conseguiu ler os quatro secrets. Ambos os targets ficaram `UP`, com
+`lastError` vazio, scrape de 15s e timeout de 5s. Consultas pela API do Prometheus
+confirmaram séries JVM e HTTP servidor das duas aplicações, HTTP cliente do Banco
+DUP e JDBC da Signatária, além dos medidores de negócio existentes.
+Após parar e reiniciar o Prometheus, o volume e o replay do WAL preservaram o
+histórico: `max_over_time` ainda retornou 3 para o contador de consultas anterior
+ao reinício, enquanto a nova JVM havia reiniciado esse contador em 1.
+
+O ensaio usou PostgreSQL isolado e apenas o cadastro sintético de Sacador como
+pré-requisito. Escrituração foi recebida pelo HTTP real e processada pelo worker
+até CONCLUIDO. Solicitação de autorização e consultas foram executadas pelos
+beans reais do Banco DUP; a decisão de aprovação usou o HTTP Bearer do Sacador.
+Como o Banco DUP não possui endpoints de entrada de negócio, um executor Java
+temporário fora do repositório iniciou seu contexto/servidor real e chamou
+`ServicoConsultaRecebiveis` na mesma JVM coletada. Não houve injeção manual de
+contadores, acesso do Banco DUP ao banco da Signatária ou controller novo.
+
+Exemplo sanitizado efetivamente observado na API do Prometheus, após uma nova
+consulta pelo bean do Banco DUP:
+
+```promql
+sum(financiamento_registradora_operacao_seconds_count{job="banco-dup",operacao="consultar_duplicatas",resultado="sucesso"})
+# antes: 2; depois: 3; delta: +1
+
+sum(signataria_escrituracao_transicoes_total{job="signataria",estado="CONCLUIDO"})
+# 1 apos o processamento real
+```
+
+Consultas úteis na UI `http://127.0.0.1:9090` ou em `/api/v1/query`:
+
+```promql
+up{job=~"banco-dup|signataria"}
+count by(job) (jvm_memory_used_bytes)
+count by(job) (http_server_requests_seconds_count)
+count by(job) (http_client_requests_seconds_count)
+count by(job) (jdbc_connections_max)
+sum by(job,operacao,resultado) (financiamento_registradora_operacao_seconds_count)
+sum by(job,operacao,resultado) (signataria_operacao_seconds_count)
+sum by(job,estado,motivo) (signataria_escrituracao_transicoes_total)
+```
+
+Medidores de operação aparecem sob demanda; execute os casos de uso existentes
+antes de procurá-los. Contadores reiniciam junto com a JVM. `up=1` indica sucesso
+do scrape, sem afirmar sucesso das operações ou disponibilidade financeira.
+HTTP 401, conexão recusada e timeout de coleta são falhas técnicas de scrape;
+os labels `resultado`/`motivo` mantêm a distinção de negócio da 4.2.
+
+### Ensaios negativos e compatibilidade
+
+| Ensaio real | Resultado |
+|---|---|
+| Senha incorreta, um job por vez, em ambas as aplicações | Somente o alvo alterado DOWN, erro HTTP 401; após restaurar o arquivo, UP |
+| Cada aplicação desligada | Respectivo target DOWN, conexão recusada |
+| Cada aplicação com `local` isolado | Sem métricas: Banco DUP 404; Signatária 401 com desafio Bearer |
+| Reinicialização com `local,monitoramento` | Scrape autenticado 200 e target UP |
+| `env`, `beans`, `configprops`, `heapdump`, `loggers`, com Basic operacional | Banco DUP 404; Signatária 401; nenhum endpoint liberado |
+| Listeners do Windows 8080/8081/9090 | Somente `127.0.0.1`; publicação Docker 9090 também loopback |
+| Sondas TCP aos IPs locais Ethernet/Wi-Fi, nas três portas | Nenhuma conexão estabelecida; sem alteração de firewall |
+
+O Prometheus foi parado para executar o build completo, sem alterar Java,
+Gradle, configurações das aplicações, segurança, testes, migrations ou CI.
+`.\gradlew.bat clean build --console=plain` passou em **3min**. Os XMLs JUnit
+confirmaram **322/322 testes**: 124 do Banco DUP e 198 da Signatária, incluindo
+os **10 verticais**, com zero falhas, erros ou ignorados.
+Não foi criado framework de testes de YAML: os validadores nativos e os ensaios
+de integração real verificam a configuração efetivamente executada.
+
+Não foi realizada sonda a partir de outra máquina física da LAN. Os binds e
+as sondas aos IPs das interfaces são evidências locais, não um teste externo
+completo. A UI/API não tem autenticação e o Basic do scrape usa HTTP local;
+não publique os serviços em outra interface. Nenhum dado/segredo do ensaio deve
+ser anexado ao Code Review. Grafana, dashboards e SLIs/SLOs não fizeram parte
+da 4.4.2; são acrescentados separadamente pela 4.4.3.
+
+## Grafana e confiabilidade — Entrega 4.4.3
+
+**Situação: aprovada tecnicamente após confirmação da inspeção visual manual
+pelo responsável.** A 4.4 está completa funcionalmente na feature branch, ainda
+não integrada à `main`, com os três incrementos aprovados na revisão consolidada
+local. O CI remoto da 4.4 ainda não foi validado.
+
+### Contrato dos sinais antes dos indicadores
+
+A inspeção da coleta real da 4.4.2 confirmou `up`, os timers HTTP cliente/servidor,
+`financiamento_registradora_operacao_seconds_count/sum/max`,
+`signataria_operacao_seconds_count/sum/max` e
+`signataria_escrituracao_transicoes_total`. Não havia séries `_bucket` nesses
+timers. JVM/GC/threads existem nos dois jobs; JDBC/Hikari somente na Signatária.
+
+`operacao` identifica o caso de uso instrumentado, não uma Duplicata. `resultado`
+é a classificação da chamada: `sucesso` (retorno normal), `rejeitado` (exceção
+classificada) ou `falha` (falha técnica/interna). `motivo` detalha a classificação:
+
+| Origem | Classificação efetiva |
+|---|---|
+| Banco DUP | `rejeitado`: `AUTENTICACAO_REJEITADA`, `ACESSO_NEGADO`, `RECURSO_NAO_ENCONTRADO`, `PARAMETROS_INVALIDOS`, `CONFLITO`; `falha`: demais motivos do gateway ou `ERRO_INTERNO` |
+| Signatária | `rejeitado`: `acesso_negado`, `nao_encontrado`, `conflito`, `parametros`, `negocio`; `falha`: `infraestrutura`, `interno` |
+| Retorno normal | `resultado=sucesso`, `motivo=nenhum`; não implica aprovação financeira ou autorização ATIVA |
+
+Para sucesso **técnico**, `AUTENTICACAO_REJEITADA` do Banco DUP deve contar como
+falha técnica apesar de `resultado=rejeitado`. As demais rejeições ficam
+separadas: não se presume que todo acesso negado ou parâmetro inválido seja uma
+rejeição financeira legítima. Falhas anteriores ao serviço, como Bearer recusado
+pelo filtro da Signatária, aparecem nas métricas HTTP, não nesse timer.
+
+`estado` nas transições tem outro significado: `EM_PROCESSAMENTO` é reserva,
+`PENDENTE` é retorno para tentativa, `CONCLUIDO` é criação local confirmada,
+`REJEITADO` é rejeição de negócio e `FALHA_TECNICA` é falha terminal. Os três
+últimos são terminais por processamento; o contador agrega **eventos após commit**,
+com possíveis retomadas, não estoque atual nem conjuntos mutuamente exclusivos
+de chamadas. O recebimento inicial não acrescenta uma transição PENDENTE.
+
+### Arquitetura e provisionamento
+
+O Compose da 4.4.2 preserva integralmente o serviço Prometheus e acrescenta
+`grafana/grafana:13.3.1` (OSS), versão estável explícita. Grafana e Prometheus
+compartilham somente a rede Docker de monitoramento; o datasource usa
+`http://prometheus:9090`, UID estável `duplicata-prometheus`. As aplicações continuam
+no Windows em `127.0.0.1:8080/8081`, com Basic operacional separado de Bearer.
+As publicações são `127.0.0.1:9090` e `127.0.0.1:3000`. PostgreSQL não foi alterado.
+
+Datasource e provider em `infra/local/grafana/provisioning/` e dois JSONs em
+`infra/local/grafana/dashboards/` são carregados automaticamente. As definições
+versionadas prevalecem sobre edição manual. O volume próprio do Grafana guarda
+contas/preferências; Prometheus continua guardando as séries. Nenhum painel
+consulta diretamente PostgreSQL ou usa plugins externos.
+
+O processo Grafana usa UID 472, sem privilégios, rootfs somente leitura e `/tmp`
+efêmero. A senha administrativa é aleatória, externa, em arquivo privado ignorado
+pelo Git, lido por `GF_SECURITY_ADMIN_PASSWORD__FILE`. Não há senha padrão;
+o entrypoint exige arquivo regular com conteúdo não branco. Esse controle foi acrescentado após
+reproduzir o Docker criando diretório no caminho de um secret ausente: tamanho
+não vazio isoladamente não impedia o fallback. Ausência/diretório e arquivo vazio
+agora encerram o container com código 1 antes do Grafana. Conteúdo somente com
+espaços/quebras de linha também é rejeitado, evitando senha efetiva vazia após
+a leitura pelo script oficial.
+
+Acesso anônimo e registro público estão desabilitados. A sonda preliminar criou
+um banco de prova antes dessa correção; sua senha foi rotacionada pelo CLI oficial
+via stdin, preservando o volume. Uma prova adicional com banco novo e descartável
+confirmou a senha privada na primeira inicialização. A senha inicial é aplicada
+ao banco apenas na criação: trocar `__FILE` não rotaciona uma conta existente.
+[Geração, rotação e comandos operacionais](../infra/local/README.md#grafana--entrega-443).
+Referências oficiais: [imagem OSS e configuração por arquivo](https://grafana.com/docs/grafana/latest/setup-grafana/configure-docker/),
+[release 13.3.1](https://grafana.com/grafana/download/13.3.1?edition=oss) e
+[provisionamento](https://grafana.com/docs/grafana/latest/administration/provisioning/).
+
+### Dashboards
+
+| Dashboard / UID | Conteúdo |
+|---|---|
+| Saúde e integração / `duplicata-saude` | Estado/histórico e percentual observado de coleta, taxas HTTP servidor/cliente, erros por categoria/rota, latência média HTTP e de operações, heap, threads, pausas GC e pool JDBC/Hikari |
+| Operações de Duplicatas / `duplicata-operacoes` | Consultas e solicitações do Banco DUP, recebimentos, volumes por operação/camada, eventos de transição, falhas técnicas, outras rejeições, rejeições confirmadas do worker, sucesso técnico e p95 de consulta |
+
+Cada dashboard possui 13 painéis, incluindo a orientação inicial. Legendas usam
+somente labels existentes. Um estado/motivo ainda não observado fica sem série.
+Conclusões e transições acumuladas mostram eventos desde o início da JVM,
+inclusive o primeiro evento observado; não são estoque de registros. As demais
+taxas/volumes usam `rate`/`increase`, que extrapolam nas bordas da janela e não
+conseguem reconstruir eventos anteriores à primeira amostra de uma série nova.
+Não são contabilidade ou auditoria exata de operações financeiras.
+
+### Histogramas seletivos e p95
+
+Somente `financiamento.registradora.operacao` e `signataria.operacao` recebem
+`percentiles-histogram=true`, limites esperados de 1ms a 10s e fronteira adicional
+de 2s, somente em `application-monitoramento.yml`. São os mesmos timers existentes,
+sem novos medidores ou labels. HTTP/JVM/JDBC mantêm sua configuração anterior.
+Os limites controlam a quantidade de buckets, não descartam amostras: `+Inf`
+continua cobrindo durações maiores. Buckets aumentam séries por combinação de
+labels; a cardinalidade própria permanece finita.
+
+Exportação real confirmada: `financiamento_registradora_operacao_seconds_bucket`
+e `signataria_operacao_seconds_bucket`. O p95 usa `histogram_quantile(0.95, sum
+by(job,operacao,le)(rate(..._bucket[15m])))`; o label `le` é preservado até o cálculo.
+O painel filtra `operacao=consultar_duplicatas` e `resultado=sucesso`, por camada,
+e só apresenta o resultado quando `sum by(job,operacao)(increase(..._count[15m]))
+>= 20`. Abaixo disso fica sem dados. Não usa média/max como percentil nem quantis
+locais não agregáveis. O resultado é aproximação por buckets, não medida exata.
+
+### SLIs e metas experimentais
+
+Janela dos indicadores: **15 minutos**; taxas operacionais: **5 minutos**.
+
+- **Coleta:** `up` e `100 * avg_over_time(up[15m])`, por job. Medem respostas do
+  scrape, não disponibilidade integral do serviço ou de uma operação. Não há SLO
+  de disponibilidade adotado; restrinja a avaliação à janela de ensaio ativo.
+  Desligamentos intencionais continuam visíveis, sem serem chamados de incidentes
+  de produção. Não existe calendário instrumentado para excluí-los automaticamente.
+- **Sucesso técnico por camada:** sejam `T = sum by(job)(increase(timer_count[15m]))`
+  e `F` a mesma soma para a união de `resultado=falha` com
+  `motivo=AUTENTICACAO_REJEITADA`. O SLI é **100 × (1 − F/T)**, somente se `T>0`.
+  Ausência de séries de falha vira zero apenas quando existe tráfego medido;
+  `T=0` não vira 100%. A união evita contar uma credencial duas vezes. Rejeições
+  classificadas restantes contam como respostas técnicas, sem afirmar sucesso
+  de negócio. É uma medição de chamadas de serviço, não um SLI de ponta a ponta:
+  não cobre autenticação anterior ao serviço, worker ocioso ou tempo em fila.
+- **Latência:** p95 das consultas de Duplicatas bem-sucedidas por job/operação,
+  conforme os histogramas e o volume mínimo acima. Rejeições e falhas não entram
+  nesse p95; continuam nos indicadores técnicos e nos painéis próprios.
+
+**99% de sucesso técnico** e **p95 de consulta ≤2s** são referências experimentais
+para ensaios locais, sustentadas pelos labels/buckets existentes. Não são um
+compromisso de produção nem uma conclusão estatística a partir de 20 amostras.
+Não se adota SLO de taxa de CONCLUIDO sobre todas as transições: tentativas e
+eventos intermediários não são denominador válido de sucesso de processamentos.
+Não há alertas, Alertmanager, regras de produção ou orçamento de erro formal.
+
+Consultas principais (as expressões completas dos indicadores estão nos JSONs):
+
+```promql
+up{job=~"banco-dup|signataria"}
+sum by(job,operacao,resultado,motivo) (rate(financiamento_registradora_operacao_seconds_count[5m]))
+sum by(operacao,resultado,motivo) (rate(signataria_operacao_seconds_count{job="signataria"}[5m]))
+sum by(estado) (signataria_escrituracao_transicoes_total{job="signataria"})
+sum by(job,operacao,le) (rate(financiamento_registradora_operacao_seconds_bucket[15m]))
+```
+
+### Evidências integradas e limites
+
+Autenticação real: UI anônima redireciona para `/login`; API protegida retorna
+401. Senha inicial privada em banco novo retornou 200 e administrador correto.
+O datasource retornou `status=OK`; `/api/search?type=dash-db` listou os dois UIDs
+e `/api/dashboards/uid/{uid}` confirmou `meta.provisioned=true`.
+
+As 28 expressões passaram no `promtool check rules` e foram executadas por
+`POST /api/ds/query`, retornando frames/amostras reais para os sinais observados.
+Sinais não produzidos continuam sem dados, sem preenchimento de sucesso fictício.
+Trinta novas consultas elevaram o contador Banco DUP de 1 para 31. Escrituração
+real confirmou CONCLUIDO e rejeição por `DUPLICATA_JA_ESCRITURADA`.
+Após volume suficiente, a API do Grafana retornou p95 de aproximadamente 0,047s
+no Banco DUP e 0,025s na Signatária; antes disso não havia amostras no painel.
+Esses valores descrevem aquele ensaio, não latência garantida.
+
+Na conferência após o build, uma segunda carga real produziu p95 de aproximadamente
+0,342s e 0,150s, respectivamente. O painel de conclusões acumuladas acompanhou
+explicitamente o contador real de 1 para 2, sem inferir zero antes da primeira
+amostra. A variação entre ensaios reforça o caráter experimental das referências.
+
+Ao parar a Signatária, o próprio Grafana retornou `up=0`; uma chamada do Banco
+DUP registrou `resultado=falha,motivo=INDISPONIVEL`. Após reinício, `up=1` e a
+integração recuperou. Reiniciar Grafana preservou senha administrativa, preferência
+de tema, os dois dashboards e o datasource saudável, sem excluir volumes.
+
+Dois novos testes HTTP verificam exportação de buckets, fronteira de 2s,
+igualdade entre `+Inf` e count e ausência de buckets HTTP indiscriminados.
+Seis casos de `grafana/tests/indicadores.test.yml`, executados por `promtool test
+rules`, validam sem tráfego, rejeição classificada, credencial recusada, falha
+técnica e p95 com/sem amostras. Esses vetores não foram inseridos na TSDB real.
+O provisionamento foi validado pelo próprio servidor Grafana e sua API, além
+do parse dos JSONs, sem adicionar framework de validação.
+
+`.\gradlew.bat clean build --console=plain` aprovado em **4min25s**, com Prometheus
+e Grafana parados: **324/324 testes** (125 do Banco DUP e 199 da Signatária),
+incluindo **10 verticais**, com zero falhas, erros ou ignorados. O build mantém
+independência dos backends e das credenciais operacionais locais. Houve avisos
+Hikari de conexões fechadas durante encerramento dos contextos de teste, sem
+falhas da suíte; não foi alterado o ciclo de vida dos testes existentes.
+
+Conferência final em 18/11/2026, após a pausa por limite de uso: os volumes do
+Grafana/Prometheus e os cinco arquivos privados permaneceram preservados. Os
+backends foram reiniciados e o PostgreSQL descartável da prova foi reproduzido,
+sem tocar no PostgreSQL persistente. Duas aplicações/targets UP, datasource OK,
+dois dashboards provisionados e todas as 28 consultas pela API foram reconfirmados.
+As expressões finais passaram no `promtool check rules`; os seis testes PromQL
+também passaram e suas expressões coincidem com as dos painéis. Nova carga elevou
+consultas de 1 para 26 e confirmou CONCLUIDO/REJEITADO. O p95 observado foi cerca
+de 0,302s/0,136s, por camada. Os XMLs preservados confirmaram os 324 testes do build
+de 17/11; nenhuma alteração Java ou de configuração das aplicações ocorreu na
+retomada e o build não foi repetido.
+
+**Validação visual manual do responsável:** o responsável pelo projeto inspecionou
+pessoalmente Saúde e integração e Operações de Duplicatas e confirmou os dois
+dashboards funcionando corretamente. Essa confirmação atende à condição de
+inspeção visual para aprovação técnica e commit local. O Computer Use não realizou
+a inspeção; não são alegados screenshots ou evidência visual automatizada.
+As 28 consultas PromQL, seis testes nativos e 324 testes Gradle, incluindo dez
+verticais, permanecem aprovados, sem alteração funcional posterior.
+
+**Revisão consolidada local em 18/11/2026:** os três incrementos da 4.4 foram
+aprovados, preservando a confirmação visual manual do responsável. Os seis casos
+PromQL passaram novamente com `prom/prometheus:v3.13.5` e suas expressões coincidem
+exatamente com as dos dashboards. Foram integrados ao
+[workflow existente](../.github/workflows/ci.yml), no job `build-test`, com o nome
+obrigatório `Build e testes` preservado. O passo usa `promtool test rules` em
+container descartável, com montagem somente leitura e sem rede, secrets ou
+inicialização de serviços; qualquer teste reprovado falha o job.
+O workflow passou no `actionlint 1.7.12`. Gradle, Java 21, cache e relatórios JUnit
+permanecem preservados. Os **324/324 testes Gradle**, incluindo dez verticais,
+permanecem como evidência do build anterior, sem nova execução nesta mudança de
+workflow/documentação. Os **seis testes PromQL** foram executados nesta revisão.
+O **CI remoto ainda não foi validado** e a entrega **não está integrada à `main`**.
+
+Limites: uso HTTP exclusivamente local e secrets em disco privado, sem autenticação
+de produção. Não houve sonda de outra máquina física da LAN. A validação automatizada
+dos dados usou queries e frames da API, complementada pela inspeção visual manual
+do responsável. Reinício de JVM zera contadores; `rate`/`increase` tratam resets,
+mas não recuperam eventos nunca coletados. Retenção/backup e metas de produção
+não foram definidos. Configurações de negócio, segurança Basic/Bearer, OTLP/W3C
+e PostgreSQL permanecem preservados; o CI recebeu somente o passo PromQL descrito acima.

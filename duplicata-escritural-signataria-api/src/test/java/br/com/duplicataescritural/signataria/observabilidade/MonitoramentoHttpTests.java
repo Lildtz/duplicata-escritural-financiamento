@@ -100,6 +100,25 @@ class MonitoramentoHttpTests {
     }
 
     @Test
+    void exportaBucketsSeletivosDaOperacaoSemAlterarTimersHttp() throws Exception {
+        assertThat(enviar("/api/v1/autorizacoes-consulta/" + UUID.randomUUID(),
+                "Bearer " + TOKEN_FINANCIADOR, "GET", null).statusCode()).isEqualTo(404);
+        var resposta = enviar("/actuator/prometheus", BASIC, "GET", null);
+        assertThat(resposta.statusCode()).isEqualTo(200);
+        assertThat(resposta.body()).contains("# TYPE signataria_operacao_seconds histogram")
+                .containsPattern("le=\"2(?:\\.0)?\"")
+                .doesNotContain("http_server_requests_seconds_bucket", "http_client_requests_seconds_bucket");
+        var infinito = resposta.body().lines().filter(linha -> linha.startsWith("signataria_operacao_seconds_bucket{"))
+                .filter(linha -> linha.contains("operacao=\"consultar_autorizacao\"") && linha.contains("le=\"+Inf\""))
+                .findFirst().orElseThrow();
+        var contagem = resposta.body().lines().filter(linha -> linha.startsWith("signataria_operacao_seconds_count{"))
+                .filter(linha -> linha.contains("operacao=\"consultar_autorizacao\""))
+                .findFirst().orElseThrow();
+        assertThat(Double.parseDouble(infinito.substring(infinito.lastIndexOf(' ') + 1)))
+                .isPositive().isEqualTo(Double.parseDouble(contagem.substring(contagem.lastIndexOf(' ') + 1)));
+    }
+
+    @Test
     void rejeitaCredenciaisAusentesIncorretasEBearersDeAmbosPapeis(CapturedOutput logs) throws Exception {
         for (String credencial : List.of("", "Basic " + Base64.getEncoder().encodeToString(
                 (USUARIO + ":" + segredo()).getBytes(StandardCharsets.UTF_8)),

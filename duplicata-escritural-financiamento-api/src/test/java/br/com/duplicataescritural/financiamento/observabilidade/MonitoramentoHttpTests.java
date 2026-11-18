@@ -85,6 +85,24 @@ class MonitoramentoHttpTests {
     }
 
     @Test
+    void exportaBucketsSeletivosDaOperacaoSemAlterarTimersHttp() throws Exception {
+        banco.getBean(ServicoConsultaRecebiveis.class).consultarDuplicatas(UUID.randomUUID(), 0, 1);
+        var resposta = enviar(banco, "/actuator/prometheus", BASIC, "GET");
+        assertThat(resposta.statusCode()).isEqualTo(200);
+        assertThat(resposta.body()).contains("# TYPE financiamento_registradora_operacao_seconds histogram")
+                .containsPattern("le=\"2(?:\\.0)?\"")
+                .doesNotContain("http_server_requests_seconds_bucket", "http_client_requests_seconds_bucket");
+        var infinito = resposta.body().lines().filter(linha -> linha.startsWith("financiamento_registradora_operacao_seconds_bucket{"))
+                .filter(linha -> linha.contains("operacao=\"consultar_duplicatas\"") && linha.contains("le=\"+Inf\""))
+                .findFirst().orElseThrow();
+        var contagem = resposta.body().lines().filter(linha -> linha.startsWith("financiamento_registradora_operacao_seconds_count{"))
+                .filter(linha -> linha.contains("operacao=\"consultar_duplicatas\""))
+                .findFirst().orElseThrow();
+        assertThat(Double.parseDouble(infinito.substring(infinito.lastIndexOf(' ') + 1)))
+                .isPositive().isEqualTo(Double.parseDouble(contagem.substring(contagem.lastIndexOf(' ') + 1)));
+    }
+
+    @Test
     void rejeitaAusenciaErroBearerEMetodosDiferentesDeGet(CapturedOutput logs) throws Exception {
         for (String credencial : List.of("", "Basic " + Base64.getEncoder().encodeToString(
                 (USUARIO + ":" + segredo()).getBytes(StandardCharsets.UTF_8)), "Bearer " + TOKEN)) {

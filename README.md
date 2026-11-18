@@ -63,7 +63,9 @@ A Entrega **4.4.1 está aprovada e versionada na feature branch
 `feat/4.4-monitoramento` em `a2dde54`, ainda não integrada à `main`**.
 A **4.4.2 está aprovada tecnicamente em Code Review na mesma feature branch**,
 ainda não integrada à `main`, com coleta real pelo Prometheus no Docker Desktop.
-A 4.4.3 permanece planejada; a Entrega 4.4 não está concluída.
+A **4.4.3 está aprovada tecnicamente após inspeção visual manual pelo responsável**,
+com os dois dashboards funcionando. A Entrega 4.4 está completa funcionalmente na
+feature branch, ainda não integrada à `main`; a revisão consolidada permanece pendente.
 
 As Entregas 1, 2, 3.1 e 3.2 estão implementadas. A 3.2 recebeu aprovação técnica retrospectiva em 13/11/2026, sem evidência de aceite histórico anterior, conforme o [roadmap](docs/roadmap.md). A 3.4 exercita o fluxo completo do simulador, preservando as fronteiras entre as aplicações.
 
@@ -144,7 +146,8 @@ configurável por `TRACING_SAMPLING_PROBABILITY` (local `1.0`, demais perfis `0.
 Veja [métricas, segurança, configuração OTLP e testes de observabilidade](docs/observabilidade.md).
 A suíte vertical reutiliza a infraestrutura da 3.4 e um receptor OTLP efêmero para
 verificar os spans das duas JVMs. A coleta Prometheus da 4.4.2 está aprovada em Code Review;
-dashboards continuam planejados para a 4.4.3.
+os dashboards e indicadores da 4.4.3 estão aprovados tecnicamente, com inspeção visual
+manual confirmada pelo responsável.
 
 Validação final da 4.2: 277 testes aprovados, incluindo dez verticais, sem falhas, erros
 ou ignorados. Três execuções independentes adicionais do teste OTLP passaram. Foram
@@ -152,7 +155,7 @@ aprovados os ajustes de robustez do diagnóstico JDBC e da espera de spans no
 Awaitility. Na 4.2, nenhum backend externo de monitoramento foi validado. A entrega
 4.4.1 está aprovada tecnicamente na feature branch, ainda não integrada à `main`;
 4.4.2 está aprovada tecnicamente em Code Review na feature branch, ainda não
-integrada à `main`; 4.4.3 e 4.5 permanecem planejadas.
+integrada à `main`; 4.4.3 está aprovada tecnicamente e 4.5 permanece planejada.
 
 ## Exposição Prometheus local — Entrega 4.4.1
 
@@ -207,6 +210,39 @@ Validação da 4.4.2: `clean build --console=plain` aprovado em **3min**, com o
 Prometheus parado: **322/322 testes** (124 do Banco DUP e 198 da Signatária),
 incluindo os **10 verticais**, sem falhas, erros ou ignorados.
 
+## Grafana e confiabilidade — Entrega 4.4.3
+
+**Aprovada tecnicamente após inspeção visual manual pelo responsável**, ainda não
+integrada à `main`. O Compose de
+monitoramento acrescenta Grafana OSS **13.3.1** em `127.0.0.1:3000`, com volume
+próprio e senha administrativa aleatória em secret local ignorado pelo Git.
+Acesso anônimo e cadastro público estão desabilitados; senha ausente, caminho
+como diretório ou arquivo vazio/em branco impedem a inicialização.
+
+Dois dashboards são provisionados automaticamente na pasta **Duplicata local**:
+**Saúde e integração** e **Operações de Duplicatas**. O datasource de UID
+`duplicata-prometheus` consulta `http://prometheus:9090` pela rede Docker.
+Histogramas seletivos dos dois timers de operação permitem p95 de consultas
+bem-sucedidas, somente com pelo menos 20 amostras em 15min. Nenhum timer é duplicado.
+
+As referências experimentais são 99% de sucesso técnico por camada e p95 de
+consulta até 2s. Credencial de integração recusada conta como falha técnica;
+rejeições classificadas ficam separadas. Sem tráfego não aparece sucesso de 100%.
+`up` mede coleta; transições contam eventos após commit, sem representar estoque.
+Não há alertas ou promessa de disponibilidade de produção.
+
+Veja [provisionamento privado, acesso e operação](infra/local/README.md#grafana--entrega-443)
+e [definições, PromQL e evidências](docs/observabilidade.md#grafana-e-confiabilidade--entrega-443).
+
+Validação da 4.4.3: build completo aprovado em **4min25s**, com Prometheus e
+Grafana parados. **324/324 testes** (125 do Banco DUP e 199 da Signatária),
+incluindo os **10 verticais**, zero falhas, erros ou ignorados. Seis casos PromQL
+adicionais passaram no `promtool`; os dois dashboards foram verificados pela API
+com dados reais. O responsável confirmou pessoalmente o funcionamento dos dois
+dashboards. Essa validação visual é manual; o Computer Use não realizou a inspeção.
+A 4.4 está completa funcionalmente na feature branch, com revisão consolidada
+pendente, incluindo a decisão sobre automatizar os seis testes PromQL no CI.
+
 ## Integração contínua e contribuições
 
 O workflow [CI](.github/workflows/ci.yml) executa em PRs direcionados à
@@ -232,7 +268,7 @@ foram publicados na execução, com retenção de sete dias.
 Foi validada uma execução pós-merge; a estabilidade futura será acompanhada pelas
 execuções recorrentes do CI. A 4.4.1 está aprovada tecnicamente na feature branch,
 ainda não integrada à `main`; 4.4.2 está aprovada tecnicamente em Code Review na
-feature branch, ainda não integrada à `main`, e 4.4.3/4.5 permanecem planejadas.
+feature branch, ainda não integrada à `main`; 4.4.3 está aprovada tecnicamente e 4.5 permanece planejada.
 
 ## Evolução do projeto
 O desenvolvimento segue entregas incrementais, priorizando funcionalidades verificáveis, testes automatizados e decisões arquiteturais justificadas.

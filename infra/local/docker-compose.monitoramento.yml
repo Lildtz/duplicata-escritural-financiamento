@@ -22,6 +22,40 @@ services:
     networks:
       - monitoramento
 
+  grafana:
+    image: grafana/grafana:13.3.1
+    user: "472:472"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - test -f /run/secrets/grafana_admin_senha && grep -q '[^[:space:]]' /run/secrets/grafana_admin_senha && exec /run.sh
+    environment:
+      GF_SECURITY_ADMIN_USER: operador-grafana
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_senha
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    tmpfs:
+      - /tmp
+    secrets:
+      - grafana_admin_senha
+    networks:
+      - monitoramento
+
 secrets:
   financiamento_usuario:
     file: ./.env.monitoramento/financiamento.usuario
@@ -31,6 +65,8 @@ secrets:
     file: ./.env.monitoramento/signataria.usuario
   signataria_senha:
     file: ./.env.monitoramento/signataria.senha
+  grafana_admin_senha:
+    file: ./.env.monitoramento/grafana-admin.senha
 
 networks:
   monitoramento:
@@ -38,3 +74,4 @@ networks:
 
 volumes:
   prometheus-data:
+  grafana-data:

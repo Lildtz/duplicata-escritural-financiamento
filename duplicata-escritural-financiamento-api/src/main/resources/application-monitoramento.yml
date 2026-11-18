@@ -7,6 +7,16 @@ financiamento:
     senha-hash: ${FINANCIAMENTO_METRICAS_SENHA_HASH:}
 
 management:
+  metrics:
+    distribution:
+      percentiles-histogram:
+        financiamento.registradora.operacao: true
+      minimum-expected-value:
+        financiamento.registradora.operacao: 1ms
+      maximum-expected-value:
+        financiamento.registradora.operacao: 10s
+      slo:
+        financiamento.registradora.operacao: 2s
   endpoint:
     prometheus:
       access: read-only

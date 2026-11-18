@@ -1,0 +1,76 @@
+rule_files: []
+evaluation_interval: 1m
+
+tests:
+  - name: "Sem trafego nao e 100 por cento"
+    interval: 1m
+    input_series:
+      - series: "financiamento_registradora_operacao_seconds_count{job=\"banco-dup\",operacao=\"consultar_duplicatas\",resultado=\"sucesso\",motivo=\"nenhum\"}"
+        values: "0+0x20"
+    promql_expr_test:
+      - expr: "(100 * (1 - ((sum by(job) (increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\",resultado=\"falha\"}[15m]) or increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\",motivo=\"AUTENTICACAO_REJEITADA\"}[15m])) or on(job) (0 * sum by(job) (increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\"}[15m])))) / sum by(job) (increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\"}[15m]))))) and on(job) (sum by(job) (increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\"}[15m])) > 0)"
+        eval_time: 15m
+        exp_samples: []
+  - name: "Rejeicao classificada nao tecnica preserva sucesso tecnico"
+    interval: 1m
+    input_series:
+      - series: "financiamento_registradora_operacao_seconds_count{job=\"banco-dup\",operacao=\"consultar_duplicatas\",resultado=\"rejeitado\",motivo=\"ACESSO_NEGADO\"}"
+        values: "0+1x20"
+    promql_expr_test:
+      - expr: "(100 * (1 - ((sum by(job) (increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\",resultado=\"falha\"}[15m]) or increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\",motivo=\"AUTENTICACAO_REJEITADA\"}[15m])) or on(job) (0 * sum by(job) (increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\"}[15m])))) / sum by(job) (increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\"}[15m]))))) and on(job) (sum by(job) (increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\"}[15m])) > 0)"
+        eval_time: 15m
+        exp_samples:
+          - labels: "{job=\"banco-dup\"}"
+            value: 100
+  - name: "Credencial de integracao recusada e falha tecnica apesar de rejeitado"
+    interval: 1m
+    input_series:
+      - series: "financiamento_registradora_operacao_seconds_count{job=\"banco-dup\",operacao=\"consultar_duplicatas\",resultado=\"rejeitado\",motivo=\"AUTENTICACAO_REJEITADA\"}"
+        values: "0+1x20"
+    promql_expr_test:
+      - expr: "(100 * (1 - ((sum by(job) (increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\",resultado=\"falha\"}[15m]) or increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\",motivo=\"AUTENTICACAO_REJEITADA\"}[15m])) or on(job) (0 * sum by(job) (increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\"}[15m])))) / sum by(job) (increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\"}[15m]))))) and on(job) (sum by(job) (increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\"}[15m])) > 0)"
+        eval_time: 15m
+        exp_samples:
+          - labels: "{job=\"banco-dup\"}"
+            value: 0
+  - name: "Falha tecnica com 99 chamadas normais por falha resulta em 99 por cento"
+    interval: 1m
+    input_series:
+      - series: "financiamento_registradora_operacao_seconds_count{job=\"banco-dup\",operacao=\"consultar_duplicatas\",resultado=\"sucesso\",motivo=\"nenhum\"}"
+        values: "0+99x20"
+      - series: "financiamento_registradora_operacao_seconds_count{job=\"banco-dup\",operacao=\"consultar_duplicatas\",resultado=\"falha\",motivo=\"TIMEOUT\"}"
+        values: "0+1x20"
+    promql_expr_test:
+      - expr: "(100 * (1 - ((sum by(job) (increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\",resultado=\"falha\"}[15m]) or increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\",motivo=\"AUTENTICACAO_REJEITADA\"}[15m])) or on(job) (0 * sum by(job) (increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\"}[15m])))) / sum by(job) (increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\"}[15m]))))) and on(job) (sum by(job) (increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\"}[15m])) > 0)"
+        eval_time: 15m
+        exp_samples:
+          - labels: "{job=\"banco-dup\"}"
+            value: 99
+  - name: "p95 sem 20 amostras permanece ausente"
+    interval: 1m
+    input_series:
+      - series: "financiamento_registradora_operacao_seconds_count{job=\"banco-dup\",operacao=\"consultar_duplicatas\",resultado=\"sucesso\",motivo=\"nenhum\"}"
+        values: "0+1x20"
+      - series: "financiamento_registradora_operacao_seconds_bucket{job=\"banco-dup\",operacao=\"consultar_duplicatas\",resultado=\"sucesso\",motivo=\"nenhum\",le=\"2.0\"}"
+        values: "0+1x20"
+      - series: "financiamento_registradora_operacao_seconds_bucket{job=\"banco-dup\",operacao=\"consultar_duplicatas\",resultado=\"sucesso\",motivo=\"nenhum\",le=\"+Inf\"}"
+        values: "0+1x20"
+    promql_expr_test:
+      - expr: "histogram_quantile(0.95, sum by(job,operacao,le) (rate({__name__=~\"financiamento_registradora_operacao_seconds_bucket|signataria_operacao_seconds_bucket\",job=~\"banco-dup|signataria\",operacao=\"consultar_duplicatas\",resultado=\"sucesso\"}[15m]))) and on(job,operacao) (sum by(job,operacao) (increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\",operacao=\"consultar_duplicatas\",resultado=\"sucesso\"}[15m])) >= 20)"
+        eval_time: 5m
+        exp_samples: []
+  - name: "p95 agrega buckets quando existem amostras"
+    interval: 1m
+    input_series:
+      - series: "financiamento_registradora_operacao_seconds_count{job=\"banco-dup\",operacao=\"consultar_duplicatas\",resultado=\"sucesso\",motivo=\"nenhum\"}"
+        values: "0+10x20"
+      - series: "financiamento_registradora_operacao_seconds_bucket{job=\"banco-dup\",operacao=\"consultar_duplicatas\",resultado=\"sucesso\",motivo=\"nenhum\",le=\"2.0\"}"
+        values: "0+10x20"
+      - series: "financiamento_registradora_operacao_seconds_bucket{job=\"banco-dup\",operacao=\"consultar_duplicatas\",resultado=\"sucesso\",motivo=\"nenhum\",le=\"+Inf\"}"
+        values: "0+10x20"
+    promql_expr_test:
+      - expr: "histogram_quantile(0.95, sum by(job,operacao,le) (rate({__name__=~\"financiamento_registradora_operacao_seconds_bucket|signataria_operacao_seconds_bucket\",job=~\"banco-dup|signataria\",operacao=\"consultar_duplicatas\",resultado=\"sucesso\"}[15m]))) and on(job,operacao) (sum by(job,operacao) (increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\",operacao=\"consultar_duplicatas\",resultado=\"sucesso\"}[15m])) >= 20)"
+        eval_time: 15m
+        exp_samples:
+          - labels: "{job=\"banco-dup\",operacao=\"consultar_duplicatas\"}"
+            value: 1.9

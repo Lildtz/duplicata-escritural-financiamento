@@ -4,16 +4,18 @@ Este documento acompanha as entregas incrementais da plataforma experimental de 
 
 O progresso é registrado com base nas implementações conhecidas. Uma funcionalidade implementada ainda pode depender de Code Review, execução dos testes e homologação técnica para ser considerada concluída.
 
-**Última atualização de referência:** 17/11/2026.
+**Última atualização de referência:** 18/11/2026.
 
 ## Estado atual
 
 **Entrega 4.3 — aprovada técnica e operacionalmente em 13/11/2026; PR #1 integrado em `482b7f5`, com CI pós-merge aprovado e proteção da `main` ativa.** A 4.2 foi aprovada tecnicamente em 13/11/2026 e versionada em `54357e8`. A 4.1 permanece versionada em `03290c8` e a 3.4 em `27e950e`.
 
 A **4.4.1 está aprovada e versionada em `a2dde54` na feature branch
-`feat/4.4-monitoramento`, ainda não integrada à `main`**. A 4.4 não está
-concluída; a 4.4.2 está aprovada tecnicamente em Code Review na mesma branch,
-ainda não integrada à `main`, e a 4.4.3 permanece planejada.
+`feat/4.4-monitoramento`, ainda não integrada à `main`**. A 4.4.2 está aprovada
+tecnicamente em Code Review na mesma branch,
+ainda não integrada à `main`, e a 4.4.3 está aprovada tecnicamente após inspeção
+visual manual pelo responsável. A 4.4 está completa funcionalmente na feature
+branch, ainda não integrada à `main`, com revisão consolidada pendente.
 
 | Entrega | Descrição                                 | Situação                          |
 | ------- | ----------------------------------------- | --------------------------------- |
@@ -27,7 +29,7 @@ ainda não integrada à `main`, e a 4.4.3 permanece planejada.
 | 4.1     | OpenAPI e Swagger UI                      | Aprovada tecnicamente em 13/11/2026; versionada em `03290c8` |
 | 4.2     | Observabilidade                          | Aprovação técnica final em 13/11/2026; versionada em `54357e8` |
 | 4.3     | CI com GitHub Actions                     | Aprovada técnica e operacionalmente em 13/11/2026; integrada em `482b7f5` |
-| 4.4     | Monitoramento                            | 4.4.1 aprovada e versionada na feature branch; 4.4.2 aprovada em Code Review; 4.4.3 planejada; não integrada à `main` |
+| 4.4     | Monitoramento                            | Completa funcionalmente na feature branch; 4.4.3 aprovada após inspeção visual manual pelo responsável; revisão consolidada pendente; não integrada à `main` |
 | 4.5     | CD                                       | Planejada; estratégia de deploy a definir |
 
 ---
@@ -420,7 +422,8 @@ não havia commit, push ou PR; o encerramento remoto posterior está registrado 
 ## Planejamento restante da Fase 4
 
 Sequência aprovada; a 4.4.1 está aprovada tecnicamente e em Code Review e versionada
-em `a2dde54` na feature branch, ainda não integrada à `main`. A Entrega 4.4 permanece incompleta.
+em `a2dde54` na feature branch, ainda não integrada à `main`. Com a aprovação da
+4.4.3, a 4.4 está completa funcionalmente na feature branch; falta a revisão consolidada.
 
 ### 4.4 — Monitoramento
 
@@ -433,8 +436,13 @@ em `a2dde54` na feature branch, ainda não integrada à `main`. A Entrega 4.4 pe
   secrets locais e dois jobs com intervalo de 15s/timeout de 5s. A prova prévia
   Docker Desktop → Windows alcançou ambas as aplicações em loopback por
   `host.docker.internal`, sem alterar a segurança da 4.4.1.
-- **4.4.3 — Grafana e confiabilidade: planejada, não iniciada.** Provisionamento,
-  dashboards, buckets seletivos, SLIs/SLOs e validação integrada.
+- **4.4.3 — Grafana e confiabilidade: aprovada tecnicamente após inspeção visual manual pelo responsável.**
+  Grafana OSS 13.3.1 com senha privada, interface loopback, datasource e dois
+  dashboards provisionados. Histogramas seletivos e referências experimentais
+  de 99% técnico/p95 de consulta até 2s, com ausência de tráfego e volume mínimo
+  tratados explicitamente. Os dois dashboards foram confirmados funcionando pelo
+  responsável. A 4.4 está completa funcionalmente na feature branch, não integrada
+  à `main`, com revisão consolidada pendente.
 
 A feature branch única é `feat/4.4-monitoramento`, base
 `bab506f759e7fe6991776876f3178cb9f43ad040`. O PR #2 foi integrado nesse commit;
@@ -459,7 +467,8 @@ validada com HTTP real nas duas aplicações. Configurações incompatíveis de 
 e de servidor de gerenciamento são rejeitadas na inicialização do monitoramento.
 Os dois Code Reviews foram favoráveis; a 4.4.1 está aprovada tecnicamente e em
 Code Review na feature branch `feat/4.4-monitoramento`, ainda não integrada à
-`main`. `git diff --check` sem erros. A Entrega 4.4 permanece incompleta.
+`main`. `git diff --check` sem erros. Naquele encerramento da 4.4.1, a 4.4 ainda
+estava incompleta.
 
 Validação operacional da 4.4.2 em 17/11/2026: os dois jobs ficaram `UP`, sem erro
 de autenticação. Métricas JVM/HTTP de ambas as aplicações, HTTP cliente do Banco
@@ -479,12 +488,38 @@ Compose e `promtool check config` aprovados, incluindo leitura dos secrets pelo
 UID 65534. Procedimentos e limites da prova estão no
 [guia de coleta](observabilidade.md#coleta-prometheus--entrega-442). A 4.4.2 está
 aprovada tecnicamente em Code Review na feature branch, ainda não integrada à
-`main`; Grafana e confiabilidade continuam reservados à 4.4.3.
+`main`. Grafana e confiabilidade são acrescentados separadamente pela 4.4.3.
 
 Build completo da 4.4.2: `.\gradlew.bat clean build --console=plain` aprovado em
 **3min**, com o Prometheus parado. XMLs confirmaram **322/322 testes**: 124 do
 Banco DUP e 198 da Signatária, incluindo os **10 verticais**, com zero falhas,
 erros ou ignorados. Nenhum teste ou código das aplicações foi alterado.
+
+Validação integrada da 4.4.3: datasource saudável via API, dois dashboards com
+`provisioned=true` e 28 consultas PromQL aprovadas pelo `promtool` e consultadas
+pela API de dados do Grafana. Trinta novas consultas elevaram o contador Banco
+DUP de 1 para 31. Escrituração real produziu CONCLUIDO e rejeição confirmada
+por Duplicata já escriturada. O p95 apareceu apenas após amostras suficientes.
+Parada da Signatária foi refletida como `up=0` no Grafana; uma chamada real do
+Banco DUP registrou INDISPONIVEL. Após reinício, `up=1` e integração recuperada.
+Senha inicial privada, autenticação obrigatória e persistência após reinício
+foram comprovadas sem excluir volumes. Dois novos testes HTTP de buckets e
+seis testes nativos PromQL verificam a instrumentação e os indicadores.
+Procedimentos, limites e resultados completos estão no
+[guia de observabilidade](observabilidade.md#grafana-e-confiabilidade--entrega-443).
+
+Build da 4.4.3: `clean build --console=plain` aprovado em **4min25s**, com ambos
+os backends de monitoramento parados. XMLs confirmaram **324/324 testes**: 125
+do Banco DUP e 199 da Signatária, incluindo **10 verticais**, zero falhas,
+erros ou ignorados. São dois testes HTTP adicionais sobre o baseline de 322,
+além dos seis casos PromQL nativos. A aprovação técnica final da 4.4.3 foi
+confirmada após inspeção visual manual do responsável, que atestou o funcionamento
+dos dashboards Saúde e integração e Operações de Duplicatas. O Computer Use não
+realizou essa inspeção e não há screenshots automatizados dessa validação.
+
+**Pendência para o Code Review consolidado da 4.4:** decidir se e como executar
+automaticamente os seis testes PromQL no GitHub Actions. O workflow permanece
+inalterado nesta entrega; a execução manual com `promtool` está documentada.
 
 ### 4.5 — CD
 

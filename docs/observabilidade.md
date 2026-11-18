@@ -203,7 +203,7 @@ atual está no [roadmap](roadmap.md).
 
 **Situação: 4.4.1 aprovada tecnicamente e em Code Review, versionada em `a2dde54`
 na feature branch `feat/4.4-monitoramento`, ainda não integrada à `main`.
-A Entrega 4.4 permanece incompleta.**
+Na aprovação da 4.4.1, a Entrega 4.4 ainda estava incompleta.**
 
 As duas aplicações usam `micrometer-registry-prometheus`, com versão gerenciada
 pelo Spring Boot 4.1.1. O registry exporta os medidores da 4.2, sem novos contadores,
@@ -415,8 +415,9 @@ e [cadeias de segurança](https://docs.spring.io/spring-security/reference/servl
 
 **Situação: aprovada tecnicamente em Code Review na feature branch
 `feat/4.4-monitoramento`, ainda não integrada à `main`.** A 4.4.1 está aprovada
-e versionada em `a2dde54` na mesma branch; a 4.4 permanece incompleta e a 4.4.3
-permanece planejada, não iniciada.
+e versionada em `a2dde54` na mesma branch. Com a aprovação da 4.4.3, a 4.4 está
+completa funcionalmente na feature branch, ainda não integrada à `main`, com
+revisão consolidada pendente, conforme a seção abaixo.
 
 ### Infraestrutura e fronteira de rede
 
@@ -548,4 +549,221 @@ Não foi realizada sonda a partir de outra máquina física da LAN. Os binds e
 as sondas aos IPs das interfaces são evidências locais, não um teste externo
 completo. A UI/API não tem autenticação e o Basic do scrape usa HTTP local;
 não publique os serviços em outra interface. Nenhum dado/segredo do ensaio deve
-ser anexado ao Code Review. Grafana, dashboards e SLIs/SLOs continuam para a 4.4.3.
+ser anexado ao Code Review. Grafana, dashboards e SLIs/SLOs não fizeram parte
+da 4.4.2; são acrescentados separadamente pela 4.4.3.
+
+## Grafana e confiabilidade — Entrega 4.4.3
+
+**Situação: aprovada tecnicamente após confirmação da inspeção visual manual
+pelo responsável.** A 4.4 está completa funcionalmente na feature branch, ainda
+não integrada à `main`, com revisão consolidada pendente. Não há declaração de
+CI remoto da 4.4.3.
+
+### Contrato dos sinais antes dos indicadores
+
+A inspeção da coleta real da 4.4.2 confirmou `up`, os timers HTTP cliente/servidor,
+`financiamento_registradora_operacao_seconds_count/sum/max`,
+`signataria_operacao_seconds_count/sum/max` e
+`signataria_escrituracao_transicoes_total`. Não havia séries `_bucket` nesses
+timers. JVM/GC/threads existem nos dois jobs; JDBC/Hikari somente na Signatária.
+
+`operacao` identifica o caso de uso instrumentado, não uma Duplicata. `resultado`
+é a classificação da chamada: `sucesso` (retorno normal), `rejeitado` (exceção
+classificada) ou `falha` (falha técnica/interna). `motivo` detalha a classificação:
+
+| Origem | Classificação efetiva |
+|---|---|
+| Banco DUP | `rejeitado`: `AUTENTICACAO_REJEITADA`, `ACESSO_NEGADO`, `RECURSO_NAO_ENCONTRADO`, `PARAMETROS_INVALIDOS`, `CONFLITO`; `falha`: demais motivos do gateway ou `ERRO_INTERNO` |
+| Signatária | `rejeitado`: `acesso_negado`, `nao_encontrado`, `conflito`, `parametros`, `negocio`; `falha`: `infraestrutura`, `interno` |
+| Retorno normal | `resultado=sucesso`, `motivo=nenhum`; não implica aprovação financeira ou autorização ATIVA |
+
+Para sucesso **técnico**, `AUTENTICACAO_REJEITADA` do Banco DUP deve contar como
+falha técnica apesar de `resultado=rejeitado`. As demais rejeições ficam
+separadas: não se presume que todo acesso negado ou parâmetro inválido seja uma
+rejeição financeira legítima. Falhas anteriores ao serviço, como Bearer recusado
+pelo filtro da Signatária, aparecem nas métricas HTTP, não nesse timer.
+
+`estado` nas transições tem outro significado: `EM_PROCESSAMENTO` é reserva,
+`PENDENTE` é retorno para tentativa, `CONCLUIDO` é criação local confirmada,
+`REJEITADO` é rejeição de negócio e `FALHA_TECNICA` é falha terminal. Os três
+últimos são terminais por processamento; o contador agrega **eventos após commit**,
+com possíveis retomadas, não estoque atual nem conjuntos mutuamente exclusivos
+de chamadas. O recebimento inicial não acrescenta uma transição PENDENTE.
+
+### Arquitetura e provisionamento
+
+O Compose da 4.4.2 preserva integralmente o serviço Prometheus e acrescenta
+`grafana/grafana:13.3.1` (OSS), versão estável explícita. Grafana e Prometheus
+compartilham somente a rede Docker de monitoramento; o datasource usa
+`http://prometheus:9090`, UID estável `duplicata-prometheus`. As aplicações continuam
+no Windows em `127.0.0.1:8080/8081`, com Basic operacional separado de Bearer.
+As publicações são `127.0.0.1:9090` e `127.0.0.1:3000`. PostgreSQL não foi alterado.
+
+Datasource e provider em `infra/local/grafana/provisioning/` e dois JSONs em
+`infra/local/grafana/dashboards/` são carregados automaticamente. As definições
+versionadas prevalecem sobre edição manual. O volume próprio do Grafana guarda
+contas/preferências; Prometheus continua guardando as séries. Nenhum painel
+consulta diretamente PostgreSQL ou usa plugins externos.
+
+O processo Grafana usa UID 472, sem privilégios, rootfs somente leitura e `/tmp`
+efêmero. A senha administrativa é aleatória, externa, em arquivo privado ignorado
+pelo Git, lido por `GF_SECURITY_ADMIN_PASSWORD__FILE`. Não há senha padrão;
+o entrypoint exige arquivo regular com conteúdo não branco. Esse controle foi acrescentado após
+reproduzir o Docker criando diretório no caminho de um secret ausente: tamanho
+não vazio isoladamente não impedia o fallback. Ausência/diretório e arquivo vazio
+agora encerram o container com código 1 antes do Grafana. Conteúdo somente com
+espaços/quebras de linha também é rejeitado, evitando senha efetiva vazia após
+a leitura pelo script oficial.
+
+Acesso anônimo e registro público estão desabilitados. A sonda preliminar criou
+um banco de prova antes dessa correção; sua senha foi rotacionada pelo CLI oficial
+via stdin, preservando o volume. Uma prova adicional com banco novo e descartável
+confirmou a senha privada na primeira inicialização. A senha inicial é aplicada
+ao banco apenas na criação: trocar `__FILE` não rotaciona uma conta existente.
+[Geração, rotação e comandos operacionais](../infra/local/README.md#grafana--entrega-443).
+Referências oficiais: [imagem OSS e configuração por arquivo](https://grafana.com/docs/grafana/latest/setup-grafana/configure-docker/),
+[release 13.3.1](https://grafana.com/grafana/download/13.3.1?edition=oss) e
+[provisionamento](https://grafana.com/docs/grafana/latest/administration/provisioning/).
+
+### Dashboards
+
+| Dashboard / UID | Conteúdo |
+|---|---|
+| Saúde e integração / `duplicata-saude` | Estado/histórico e percentual observado de coleta, taxas HTTP servidor/cliente, erros por categoria/rota, latência média HTTP e de operações, heap, threads, pausas GC e pool JDBC/Hikari |
+| Operações de Duplicatas / `duplicata-operacoes` | Consultas e solicitações do Banco DUP, recebimentos, volumes por operação/camada, eventos de transição, falhas técnicas, outras rejeições, rejeições confirmadas do worker, sucesso técnico e p95 de consulta |
+
+Cada dashboard possui 13 painéis, incluindo a orientação inicial. Legendas usam
+somente labels existentes. Um estado/motivo ainda não observado fica sem série.
+Conclusões e transições acumuladas mostram eventos desde o início da JVM,
+inclusive o primeiro evento observado; não são estoque de registros. As demais
+taxas/volumes usam `rate`/`increase`, que extrapolam nas bordas da janela e não
+conseguem reconstruir eventos anteriores à primeira amostra de uma série nova.
+Não são contabilidade ou auditoria exata de operações financeiras.
+
+### Histogramas seletivos e p95
+
+Somente `financiamento.registradora.operacao` e `signataria.operacao` recebem
+`percentiles-histogram=true`, limites esperados de 1ms a 10s e fronteira adicional
+de 2s, somente em `application-monitoramento.yml`. São os mesmos timers existentes,
+sem novos medidores ou labels. HTTP/JVM/JDBC mantêm sua configuração anterior.
+Os limites controlam a quantidade de buckets, não descartam amostras: `+Inf`
+continua cobrindo durações maiores. Buckets aumentam séries por combinação de
+labels; a cardinalidade própria permanece finita.
+
+Exportação real confirmada: `financiamento_registradora_operacao_seconds_bucket`
+e `signataria_operacao_seconds_bucket`. O p95 usa `histogram_quantile(0.95, sum
+by(job,operacao,le)(rate(..._bucket[15m])))`; o label `le` é preservado até o cálculo.
+O painel filtra `operacao=consultar_duplicatas` e `resultado=sucesso`, por camada,
+e só apresenta o resultado quando `sum by(job,operacao)(increase(..._count[15m]))
+>= 20`. Abaixo disso fica sem dados. Não usa média/max como percentil nem quantis
+locais não agregáveis. O resultado é aproximação por buckets, não medida exata.
+
+### SLIs e metas experimentais
+
+Janela dos indicadores: **15 minutos**; taxas operacionais: **5 minutos**.
+
+- **Coleta:** `up` e `100 * avg_over_time(up[15m])`, por job. Medem respostas do
+  scrape, não disponibilidade integral do serviço ou de uma operação. Não há SLO
+  de disponibilidade adotado; restrinja a avaliação à janela de ensaio ativo.
+  Desligamentos intencionais continuam visíveis, sem serem chamados de incidentes
+  de produção. Não existe calendário instrumentado para excluí-los automaticamente.
+- **Sucesso técnico por camada:** sejam `T = sum by(job)(increase(timer_count[15m]))`
+  e `F` a mesma soma para a união de `resultado=falha` com
+  `motivo=AUTENTICACAO_REJEITADA`. O SLI é **100 × (1 − F/T)**, somente se `T>0`.
+  Ausência de séries de falha vira zero apenas quando existe tráfego medido;
+  `T=0` não vira 100%. A união evita contar uma credencial duas vezes. Rejeições
+  classificadas restantes contam como respostas técnicas, sem afirmar sucesso
+  de negócio. É uma medição de chamadas de serviço, não um SLI de ponta a ponta:
+  não cobre autenticação anterior ao serviço, worker ocioso ou tempo em fila.
+- **Latência:** p95 das consultas de Duplicatas bem-sucedidas por job/operação,
+  conforme os histogramas e o volume mínimo acima. Rejeições e falhas não entram
+  nesse p95; continuam nos indicadores técnicos e nos painéis próprios.
+
+**99% de sucesso técnico** e **p95 de consulta ≤2s** são referências experimentais
+para ensaios locais, sustentadas pelos labels/buckets existentes. Não são um
+compromisso de produção nem uma conclusão estatística a partir de 20 amostras.
+Não se adota SLO de taxa de CONCLUIDO sobre todas as transições: tentativas e
+eventos intermediários não são denominador válido de sucesso de processamentos.
+Não há alertas, Alertmanager, regras de produção ou orçamento de erro formal.
+
+Consultas principais (as expressões completas dos indicadores estão nos JSONs):
+
+```promql
+up{job=~"banco-dup|signataria"}
+sum by(job,operacao,resultado,motivo) (rate(financiamento_registradora_operacao_seconds_count[5m]))
+sum by(operacao,resultado,motivo) (rate(signataria_operacao_seconds_count{job="signataria"}[5m]))
+sum by(estado) (signataria_escrituracao_transicoes_total{job="signataria"})
+sum by(job,operacao,le) (rate(financiamento_registradora_operacao_seconds_bucket[15m]))
+```
+
+### Evidências integradas e limites
+
+Autenticação real: UI anônima redireciona para `/login`; API protegida retorna
+401. Senha inicial privada em banco novo retornou 200 e administrador correto.
+O datasource retornou `status=OK`; `/api/search?type=dash-db` listou os dois UIDs
+e `/api/dashboards/uid/{uid}` confirmou `meta.provisioned=true`.
+
+As 28 expressões passaram no `promtool check rules` e foram executadas por
+`POST /api/ds/query`, retornando frames/amostras reais para os sinais observados.
+Sinais não produzidos continuam sem dados, sem preenchimento de sucesso fictício.
+Trinta novas consultas elevaram o contador Banco DUP de 1 para 31. Escrituração
+real confirmou CONCLUIDO e rejeição por `DUPLICATA_JA_ESCRITURADA`.
+Após volume suficiente, a API do Grafana retornou p95 de aproximadamente 0,047s
+no Banco DUP e 0,025s na Signatária; antes disso não havia amostras no painel.
+Esses valores descrevem aquele ensaio, não latência garantida.
+
+Na conferência após o build, uma segunda carga real produziu p95 de aproximadamente
+0,342s e 0,150s, respectivamente. O painel de conclusões acumuladas acompanhou
+explicitamente o contador real de 1 para 2, sem inferir zero antes da primeira
+amostra. A variação entre ensaios reforça o caráter experimental das referências.
+
+Ao parar a Signatária, o próprio Grafana retornou `up=0`; uma chamada do Banco
+DUP registrou `resultado=falha,motivo=INDISPONIVEL`. Após reinício, `up=1` e a
+integração recuperou. Reiniciar Grafana preservou senha administrativa, preferência
+de tema, os dois dashboards e o datasource saudável, sem excluir volumes.
+
+Dois novos testes HTTP verificam exportação de buckets, fronteira de 2s,
+igualdade entre `+Inf` e count e ausência de buckets HTTP indiscriminados.
+Seis casos de `grafana/tests/indicadores.test.yml`, executados por `promtool test
+rules`, validam sem tráfego, rejeição classificada, credencial recusada, falha
+técnica e p95 com/sem amostras. Esses vetores não foram inseridos na TSDB real.
+O provisionamento foi validado pelo próprio servidor Grafana e sua API, além
+do parse dos JSONs, sem adicionar framework de validação.
+
+`.\gradlew.bat clean build --console=plain` aprovado em **4min25s**, com Prometheus
+e Grafana parados: **324/324 testes** (125 do Banco DUP e 199 da Signatária),
+incluindo **10 verticais**, com zero falhas, erros ou ignorados. O build mantém
+independência dos backends e das credenciais operacionais locais. Houve avisos
+Hikari de conexões fechadas durante encerramento dos contextos de teste, sem
+falhas da suíte; não foi alterado o ciclo de vida dos testes existentes.
+
+Conferência final em 18/11/2026, após a pausa por limite de uso: os volumes do
+Grafana/Prometheus e os cinco arquivos privados permaneceram preservados. Os
+backends foram reiniciados e o PostgreSQL descartável da prova foi reproduzido,
+sem tocar no PostgreSQL persistente. Duas aplicações/targets UP, datasource OK,
+dois dashboards provisionados e todas as 28 consultas pela API foram reconfirmados.
+As expressões finais passaram no `promtool check rules`; os seis testes PromQL
+também passaram e suas expressões coincidem com as dos painéis. Nova carga elevou
+consultas de 1 para 26 e confirmou CONCLUIDO/REJEITADO. O p95 observado foi cerca
+de 0,302s/0,136s, por camada. Os XMLs preservados confirmaram os 324 testes do build
+de 17/11; nenhuma alteração Java ou de configuração das aplicações ocorreu na
+retomada e o build não foi repetido.
+
+**Validação visual manual do responsável:** o responsável pelo projeto inspecionou
+pessoalmente Saúde e integração e Operações de Duplicatas e confirmou os dois
+dashboards funcionando corretamente. Essa confirmação atende à condição de
+inspeção visual para aprovação técnica e commit local. O Computer Use não realizou
+a inspeção; não são alegados screenshots ou evidência visual automatizada.
+As 28 consultas PromQL, seis testes nativos e 324 testes Gradle, incluindo dez
+verticais, permanecem aprovados, sem alteração funcional posterior.
+
+**Pendência para a revisão consolidada:** decidir se e como automatizar os seis
+testes PromQL no GitHub Actions. Nenhuma alteração de workflow foi realizada.
+
+Limites: uso HTTP exclusivamente local e secrets em disco privado, sem autenticação
+de produção. Não houve sonda de outra máquina física da LAN. A validação automatizada
+dos dados usou queries e frames da API, complementada pela inspeção visual manual
+do responsável. Reinício de JVM zera contadores; `rate`/`increase` tratam resets,
+mas não recuperam eventos nunca coletados. Retenção/backup e metas de produção
+não foram definidos. Configurações de negócio, segurança Basic/Bearer, OTLP/W3C,
+PostgreSQL e CI permanecem preservados.

@@ -1,0 +1,749 @@
+{
+  "uid": "duplicata-operacoes",
+  "title": "Duplicata — Operações de Duplicatas",
+  "description": "Monitoramento local do simulador. Indicadores experimentais; não representam disponibilidade financeira.",
+  "tags": [
+    "duplicata",
+    "local",
+    "4.4.3"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "refresh": "15s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "Como interpretar",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 3
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Chamadas e eventos, não estoque de Duplicatas.** Transições são registradas após commit e podem repetir por tentativa. Sucesso técnico inclui rejeições classificadas, exceto credencial de integração recusada. Metas locais experimentais: **99% técnico** e **p95 consulta ≤2s**, sem aceite estatístico de produção."
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Consultas Banco DUP — 15min",
+      "description": "Chamadas de consulta, não quantidade de títulos. Increase estima o volume na janela.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "duplicata-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 3,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(increase(financiamento_registradora_operacao_seconds_count{job=\"banco-dup\",operacao=\"consultar_duplicatas\"}[15m]))",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sem dados",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Solicitações de autorização — 15min",
+      "description": "Chamadas no Banco DUP; repetição idempotente também conta.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "duplicata-prometheus"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 3,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(increase(financiamento_registradora_operacao_seconds_count{job=\"banco-dup\",operacao=\"solicitar_autorizacao\"}[15m]))",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sem dados",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Recebimentos de Escrituração — 15min",
+      "description": "Recebimentos bem-sucedidos; não implica novo processamento em repetição idempotente.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "duplicata-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 3,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(increase(signataria_operacao_seconds_count{job=\"signataria\",operacao=\"receber_escrituracao\",resultado=\"sucesso\"}[15m]))",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sem dados",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Conclusões confirmadas — nesta JVM",
+      "description": "Contador acumulado de conclusões após commit desde o início desta JVM. Reinicia com a aplicação; não é estoque nem registro regulatório.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "duplicata-prometheus"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 3,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(signataria_escrituracao_transicoes_total{job=\"signataria\",estado=\"CONCLUIDO\"})",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sem dados",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Banco DUP — operações/min",
+      "description": "Cada operação do Banco DUP, sem somar a medição da Signatária.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "duplicata-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "60 * sum by(operacao) (rate(financiamento_registradora_operacao_seconds_count{job=\"banco-dup\"}[5m]))",
+          "legendFormat": "{{operacao}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix:op/min",
+          "noValue": "Sem dados",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Signatária — operações/min",
+      "description": "Serviços HTTP e tentativas reais do worker; não representa processos únicos.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "duplicata-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "60 * sum by(operacao) (rate(signataria_operacao_seconds_count{job=\"signataria\"}[5m]))",
+          "legendFormat": "{{operacao}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix:op/min",
+          "noValue": "Sem dados",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Transições após commit — acumulado da JVM",
+      "description": "Eventos acumulados desde o início da JVM, com reinício dos contadores após restart. CONCLUIDO, REJEITADO e FALHA_TECNICA são terminais; PENDENTE e EM_PROCESSAMENTO podem repetir. Estado não observado fica ausente; não é estoque.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "duplicata-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by(estado) (signataria_escrituracao_transicoes_total{job=\"signataria\"})",
+          "legendFormat": "{{estado}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Sem dados",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Falhas técnicas por operação e motivo",
+      "description": "Inclui resultado=falha e AUTENTICACAO_REJEITADA do Banco DUP, mesmo quando resultado=rejeitado.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "duplicata-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 15,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "60 * sum by(job,operacao,motivo) (rate({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\",resultado=\"falha\"}[5m]) or rate({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\",motivo=\"AUTENTICACAO_REJEITADA\"}[5m]))",
+          "legendFormat": "{{job}} {{operacao}} {{motivo}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix:falhas/min",
+          "noValue": "Sem dados",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Outras rejeições classificadas",
+      "description": "Exclui credencial de integração recusada. Acesso negado/parâmetros/conflitos não são automaticamente rejeições financeiras legítimas.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "duplicata-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "60 * sum by(job,operacao,motivo) (rate({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\",resultado=\"rejeitado\",motivo!=\"AUTENTICACAO_REJEITADA\"}[5m]))",
+          "legendFormat": "{{job}} {{operacao}} {{motivo}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix:rejeicoes/min",
+          "noValue": "Sem dados",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Worker — rejeições de negócio confirmadas",
+      "description": "Somente REJEITADO após commit. PENDENTE e FALHA_TECNICA são sinais técnicos separados no painel de transições.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "duplicata-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 22,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "60 * sum by(motivo) (rate(signataria_escrituracao_transicoes_total{job=\"signataria\",estado=\"REJEITADO\"}[5m]))",
+          "legendFormat": "{{motivo}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix:eventos/min",
+          "noValue": "Sem dados",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Sucesso técnico — 15min; referência 99%",
+      "description": "1 - falhas técnicas/chamadas, por camada. Rejeições classificadas não técnicas contam como resposta técnica. Filtros de autenticação anteriores ao serviço não entram. Sem tráfego não há percentual.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "duplicata-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 29,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "(100 * (1 - ((sum by(job) (increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\",resultado=\"falha\"}[15m]) or increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\",motivo=\"AUTENTICACAO_REJEITADA\"}[15m])) or on(job) (0 * sum by(job) (increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\"}[15m])))) / sum by(job) (increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\"}[15m]))))) and on(job) (sum by(job) (increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\"}[15m])) > 0)",
+          "legendFormat": "{{job}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "noValue": "Sem dados",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false,
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 99
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "p95 consulta bem-sucedida — referência 2s",
+      "description": "Histogramas agregados por job/operação. Exige pelo menos 20 amostras em 15min; abaixo disso fica Sem dados. Aproximação por buckets, sem quantil fictício ou extrapolação de uma amostra.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "duplicata-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 29,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "duplicata-prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by(job,operacao,le) (rate({__name__=~\"financiamento_registradora_operacao_seconds_bucket|signataria_operacao_seconds_bucket\",job=~\"banco-dup|signataria\",operacao=\"consultar_duplicatas\",resultado=\"sucesso\"}[15m]))) and on(job,operacao) (sum by(job,operacao) (increase({__name__=~\"financiamento_registradora_operacao_seconds_count|signataria_operacao_seconds_count\",job=~\"banco-dup|signataria\",operacao=\"consultar_duplicatas\",resultado=\"sucesso\"}[15m])) >= 20)",
+          "legendFormat": "{{job}} {{operacao}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "Sem dados",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false,
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 2
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    }
+  ]
+}
